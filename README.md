@@ -24,10 +24,11 @@ A bunch of utilities for:
  - IP whitelist/blacklist (autoban non included countrys)
  - Media info in configured language (if possible).
  - Logo thanks to [leonardoderoy](https://github.com/leonardoderoy)
-
+ - Groups by premiere, continue, recomended and last added (frontal page)
+ - IPTV List and import
+ 
 ## Working on
  - Poster list with search by genres, actors, years or rating (complex search)
- - Groups by premiere, continue, recomended and last added (frontal page)
  - Search and download new media from web adding scrappers to configuration (youtube, elinks, magnets, torrents and dd supported, cron or manual with any external program like transmission, jdownloader, amule, qbittorent, etc).
  - Clean duplicates by quality with safe seeding (min days to seed) and max filesize to maintanin
  - Extract files on cron
