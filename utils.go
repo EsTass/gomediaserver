@@ -574,6 +574,17 @@ func checkMimeVideo(file string) bool {
 	return result
 }
 
+func checkMimeImage(file string) bool {
+    result := false
+    mime := fileMime( file )
+    valid := []string { "jpeg", "jpg", "png", "gif" }
+    if strInStr( mime, "image" ) || sliceInString(mime, valid) {
+        result = true
+    }
+
+	return result
+}
+
 //PATH IS FILE
 
 func checkIsFile( path string ) bool {

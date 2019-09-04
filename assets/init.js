@@ -1,14 +1,8 @@
 $(function () {
-    //IMG LAZYLOAD
-    //$("img.lazy").Lazy();
-    /*
-    //float header size
-    if( $( '.menuBox' ).is(":visible") ){
-        $( 'body' ).css("padding-top", $( '.menuBox' ).height() + "px");
-    }else{
-        $( 'body' ).css("padding-top", $( '.menuBoxMS' ).height() + "px");
-    }
-    */
+    $.ajaxSetup({
+        //type: 'POST',
+        timeout: 1200000,
+    });
 });
 
 //VARS
@@ -100,6 +94,12 @@ function scrollTo( idelement ){
 
 function goToURL( url ){
     window.location.href = url;
+}
+
+//NEW TAB
+
+function openTab( url ){
+    window.open(url, '_blank')
 }
 
 //LOADING OVERLAY

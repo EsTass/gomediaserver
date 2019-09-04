@@ -59,7 +59,7 @@ func cronLongRun(){
     fileAppendLine( G_CRONLONGTIME_FILE, "Cron LONG START: " + dateGetNow() + "\n" )
     
     //Clean Not Existant Files
-    cronCleanFiles()
+    //cronCleanFiles()
     
     //Clean playing
     cronCleanPlaying()

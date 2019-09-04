@@ -5,6 +5,7 @@ import (
 	//"fmt"
     "strings"
     "encoding/json"
+    //"os"
 	"os/exec"
     //"net/url"
 )
@@ -138,4 +139,72 @@ func webSearchGoogler( s string, filterurl string, titleurl string ) map[string]
     }
     
     return result
+}
+
+//LIVETV DATA EXTRACT
+
+func liveTvDataAdd( data string ) (int, int, int, int) {
+    added := 0
+    exist := 0
+    nerror := 0
+    total := 0
+    
+    //Line to line detect titles, poster and url to add
+    //add to medialive and download poster
+    datalines := strings.Split( data, "\n" )
+    ltitle := ""
+    lgtitle := ""
+    llogo := ""
+    for _, line := range datalines {
+        line =  strings.Trim(line, " \r\n")
+        if len(line) == 0 {
+            //ignore
+            ltitle = ""
+            lgtitle = ""
+            llogo = ""
+        } else if isValidUrl(line) {
+            //url, check and add
+            if sqlite_checkMediaLiveURLURL(line) {
+                showInfo( "LIVETV-DATALINE-EXIST: " + ltitle + ", " + lgtitle + ", " + llogo + ", " + line )
+                exist++
+            } else {
+                showInfo( "LIVETV-DATALINE-ADD: " + ltitle + ", " + lgtitle + ", " + llogo + ", " + line )
+                if len(lgtitle) > 0 {
+                    ltitle += " (" + lgtitle + ")"
+                }
+                codec := ffprobeVideoCodec( line )
+                if codec != "NOCODEC" {
+                    idnew := sqlite_medialive_insert(ltitle, line, llogo )
+                    showInfo( "LIVETV-ADDED: " + intToStr(idnew) )
+                    if idnew > 0 && len(llogo) > 0 {
+                        tofile := pathJoin(G_IMAGES_FOLDER, intToStr(idnew) + ".livetv")
+                        urlToFile(llogo, tofile)
+                        if checkMimeImage(tofile) == false {
+                            fileRemove(tofile)
+                        }
+                        added++
+                    }
+                } else {
+                    showInfo( "LIVETV-URL-ERROR: Codec Error: " + codec )
+                    nerror++
+                }
+            }
+            total++
+        } else if strStartWith( line, "#EXTINF" ) {
+            //Extract data
+            ltitle =  strings.Trim(fscrap_cleanTitle(regExpGetDataFirst(line, `.*,(.*)$`)), " ")
+            llogo = strings.Trim(regExpGetDataFirst(line, `.*tvg-logo=["'](.*?)["'].*$`), " ")
+            if isValidUrl(llogo) == false {
+                llogo = ""
+            }
+            lgtitle =  strings.Trim(fscrap_cleanTitle(regExpGetDataFirst(line, `.*group-title=["'](.*?)["'].*$`)), " ")
+        } else {
+            //ignore
+            ltitle = ""
+            lgtitle = ""
+            llogo = ""
+        }
+    }
+    
+    return added, exist, nerror, total
 }

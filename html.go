@@ -10,6 +10,7 @@ import (
     //"strconv"
     "time"
     "path/filepath"
+    //"io"
 )
 
 //BASIC AUTENTIFICATION
@@ -93,6 +94,17 @@ func checkBaseActionAuthAdmin( w http.ResponseWriter, r *http.Request, actionide
     return result
 }
 
+func checkLoginErrorMax( ip string ) bool {
+    result := false
+    
+    logindata := sqlite_getLogsLogins(ip)
+    if len(logindata) >= 5 {
+        result = true
+    }
+    
+    return result
+}
+
 //LOGIN FORM
 
 type loginForm struct {
@@ -123,7 +135,10 @@ func login(w http.ResponseWriter, r *http.Request) {
         //if r.FormValue("user") == "test" && r.FormValue("pass") == "test" {
         username := getParamPost(r, "user")
         pass := getParamPost(r, "pass")
-        if checkUser( username, pass ) {
+        if checkLoginErrorMax( getUserIP( r ) ) {
+            //Check for 5 trys in last 5 minutes
+            loginFormShow( w, r, "Max trys reached!" )
+        } else if checkUser( username, pass ) {
             showInfo( "LOGIN-TRY: OK loggin user: " + username + " - " + sessionident )
             sessiondata := sqlite_getSession( sessionident )
             if len( sessiondata ) > 0 {
@@ -131,11 +146,11 @@ func login(w http.ResponseWriter, r *http.Request) {
             } else {
                 sqlite_session_insert( sessionident, username, getUserIP( r ) )
             }
-            //tmpl.Execute(w, struct{ Success bool }{true})
             sqlite_log_insert( "login-OK", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
             listBase( w, r )
         } else {
             showInfo( "LOGIN-RETRY: KO loggin user: " + username + " - " + sessionident )
+            sqlite_log_insert( "login-KO", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
             loginFormShow( w, r, "User ERROR!" )
         }
     }
@@ -179,6 +194,7 @@ type listBaseTemp struct {
     PageBack    string 
     PageNext    string
     Genre       string
+    Actor       string
     Search      string
     Todos       listBaseElement
     //Todos     map[int]map[string]string {}
@@ -199,58 +215,223 @@ func listBase(w http.ResponseWriter, r *http.Request) {
         } else {
             //Page
             page := getParam(r, "page")
-            pagenum := strToInt( page )
-            var pb, pn string
-            if pagenum > 0 {
-                pb = intToStr( ( pagenum - 1 ) )
-                pn = intToStr( ( pagenum + 1 ) )
-            }else{
-                pb = ""
-                pn = intToStr( ( pagenum + 1 ) )
-            }
             //Genre
             genre := getParam(r, "genre")
             //Actor
             actor := getParam(r, "actor")
             //Search
             search := getParam(r, "search")
+            //saction for kodi/phpmediaserver compat
+            saction := getParam(r, "saction")
             
-            var listdata listBaseElement
-            var htmltitle string
-            if len( genre ) > 0 || len( actor ) > 0 || len( search ) > 0 {
-                listdata = sqlite_getMediaMediaInfoFilter( G_LISTSIZE, pagenum, genre, actor, search )
-                htmltitle = "Media List"
-                if len( genre ) > 0 {
-                    htmltitle += " Genre: " + genre
-                }
-                if len( actor ) > 0 {
-                    htmltitle += " Actor: " + actor
-                }
+            if page == "" && genre == "" && actor == "" && search == "" && saction == "" {
+                //Frontal page
+                listBaseFrontal(w,r)
+            } else if saction != "" {
+                //KODI actions, based on compat with phpmediaserver/kodi plugin
+                
             } else {
-                listdata = sqlite_getMediaMediaInfo( G_LISTSIZE, pagenum )
-                htmltitle = "Media List"
+                //List based on searchs
+                pagenum := strToInt( page )
+                var pb, pn string
+                if pagenum > 0 {
+                    pb = intToStr( ( pagenum - 1 ) )
+                    pn = intToStr( ( pagenum + 1 ) )
+                }else{
+                    pb = ""
+                    pn = intToStr( ( pagenum + 1 ) )
+                }
+                var listdata listBaseElement
+                var htmltitle string
+                if len( genre ) > 0 || len( actor ) > 0 || len( search ) > 0 {
+                    listdata = sqlite_getMediaMediaInfoFilter( G_LISTSIZE, pagenum, genre, actor, search )
+                    htmltitle = "Media List"
+                    if len( genre ) > 0 {
+                        htmltitle += " :: Genre: " + genre
+                    }
+                    if len( actor ) > 0 {
+                        htmltitle += " :: Actor: " + actor
+                    }
+                    if len( search ) > 0 {
+                        htmltitle += " :: Search: " + search
+                    }
+                } else {
+                    listdata = sqlite_getMediaMediaInfo( G_LISTSIZE, pagenum )
+                    htmltitle = "Media List"
+                }
+                if len( page ) > 0 {
+                    htmltitle += " :: Page: " + page
+                }
+                //if list < max elements remove nexpage
+                if len(listdata) < G_LISTSIZE {
+                    pn = ""
+                }
+                //get files and add tags
+                for k, midata := range listdata {
+                    taglist := strings.Join( fscrap_getFileTags( midata[ "file" ] ), " " )
+                    //showInfo( "MEDIAINFO-LIST-TAGS: " + taglist + " => " + midata[ "file" ] )
+                    listdata[k]["Tags"] = taglist
+                }
+                showInfo( "LIST-BASE-DATANUM:" + intToStr(len(listdata)) )
+                tmpl := template.Must(template.ParseFiles("html/item.list.html"))
+                menu := getMenu(w, r)
+                formData := listBaseTemp{
+                    Menu    :   template.HTML( menu ),
+                    Title   :   htmltitle,
+                    Todos   :   listdata,
+                    PageBack:   pb,
+                    PageNext:   pn,
+                    Genre   :   genre,
+                    Actor   :   actor,
+                    Search  :   search,
+                }
+                showInfo( "LIST-BASE-LIST: showing data"  )
+                tmpl.Execute(w, formData)   
             }
-            //get files and add tags
-            for k, midata := range listdata {
-                taglist := strings.Join( fscrap_getFileTags( midata[ "file" ] ), " " )
-                //showInfo( "MEDIAINFO-LIST-TAGS: " + taglist + " => " + midata[ "file" ] )
-                listdata[k]["Tags"] = taglist
-            }
-            tmpl := template.Must(template.ParseFiles("html/item.list.html"))
-            menu := getMenu(w, r)
-            formData := listBaseTemp{
-                Menu    :   template.HTML( menu ),
-                Title   :   htmltitle,
-                Todos   :   listdata,
-                PageBack:   pb,
-                PageNext:   pn,
-                Genre   :   genre,
-                Search  :   search,
-            }
-            showInfo( "LOGS-LIST: showing data"  )
-            tmpl.Execute(w, formData)
         }
     }
+}
+
+//MEDIAINFO FRONTAL LIST
+
+type listBaseFrontalTemp struct {
+    Menu        template.HTML
+    //premiere
+    Title1       string
+    PageNext1    string
+    Todos1       listBaseElement
+    //premiere best rating
+    Title2       string
+    PageNext2    string
+    Todos2       listBaseElement
+    //premiere series
+    Title3       string
+    PageNext3    string
+    Todos3       listBaseElement
+    //continue
+    Title4       string
+    PageNext4    string
+    Todos4       listBaseElement
+    //livetv
+    Title5       string
+    PageNext5    string
+    Todos5       listBaseElement
+    //recomended
+    Title6       string
+    PageNext6    string
+    Todos6       listBaseElement
+    //last added
+    Title7       string
+    PageNext7    string
+    Todos7       listBaseElement
+}
+
+func listBaseFrontal(w http.ResponseWriter, r *http.Request) {
+    //Frontal page
+
+    //Premiere
+    listdata1 := sqlite_getMediaMediaInfo_Premiere( G_LISTSIZE_MIN )
+    htmltitle1 := "Media List"
+    pn1 := ""
+    //get files and add tags
+    for k, midata := range listdata1 {
+        taglist := strings.Join( fscrap_getFileTags( midata[ "file" ] ), " " )
+        listdata1[k]["Tags"] = taglist
+    }
+    
+    //Premiere best rating
+    listdata2 := sqlite_getMediaMediaInfo_PremiereBR( G_LISTSIZE_MIN )
+    htmltitle2 := "Media List Best Rating"
+    pn2 := ""
+    //get files and add tags
+    for k, midata := range listdata2 {
+        taglist := strings.Join( fscrap_getFileTags( midata[ "file" ] ), " " )
+        listdata2[k]["Tags"] = taglist
+    }
+    
+    //Premiere series
+    listdata3 := sqlite_getMediaMediaInfo_PremiereSeries( G_LISTSIZE_MIN )
+    htmltitle3 := "Media List Best Rating"
+    pn3 := ""
+    //get files and add tags
+    for k, midata := range listdata3 {
+        taglist := strings.Join( fscrap_getFileTags( midata[ "file" ] ), " " )
+        listdata3[k]["Tags"] = taglist
+    }
+    
+    //continue
+    listdata4 := sqlite_getPlayedMediaInfoLimit( intToStr(G_LISTSIZE_MIN) )
+    htmltitle4 := "Continue"
+    pn4 := ""
+    //get files and add tags
+    for k, midata := range listdata4 {
+        taglist := strings.Join( fscrap_getFileTags( midata[ "file" ] ), " " )
+        listdata4[k]["Tags"] = taglist
+    }
+    
+    //LiveTV
+    listdata5 := sqlite_getMediaLive( intToStr(G_LISTSIZE_MIN) )
+    htmltitle5 := "LiveTV"
+    pn5 := ""
+    //get files and add tags
+    for k, midata := range listdata5 {
+        taglist := strings.Join( fscrap_getFileTags( midata[ "url" ] ), " " )
+        listdata5[k]["Tags"] = taglist
+    }
+    
+    //Recomended
+    listdata6 := make(listBaseElement)
+    htmltitle6 := ""
+    pn6 := ""
+    if len(listdata4) > 0 {
+        listdata6 = sqlite_getMediaMediaInfoRelatedID( listdata4[0]["idmediainfo"] )
+        htmltitle6 = "Recomended"
+        pn6 = ""
+        //get files and add tags
+        for k, midata := range listdata6 {
+            taglist := strings.Join( fscrap_getFileTags( midata[ "file" ] ), " " )
+            listdata6[k]["Tags"] = taglist
+        }
+    }
+    
+    //Last Added
+    listdata7 := sqlite_getMediaMediaInfo( G_LISTSIZE_MIN, 0 )
+    htmltitle7 := "Last Added"
+    pn7 := "1"
+    //get files and add tags
+    for k, midata := range listdata7 {
+        taglist := strings.Join( fscrap_getFileTags( midata[ "file" ] ), " " )
+        listdata7[k]["Tags"] = taglist
+    }
+    
+    tmpl := template.Must(template.ParseFiles("html/item.list.frontal.html"))
+    menu := getMenu(w, r)
+    formData := listBaseFrontalTemp{
+        Menu    :   template.HTML( menu ),
+        Title1   :   htmltitle1,
+        PageNext1:   pn1,
+        Todos1   :   listdata1,
+        Title2   :   htmltitle2,
+        PageNext2:   pn2,
+        Todos2   :   listdata2,
+        Title3   :   htmltitle3,
+        PageNext3:   pn3,
+        Todos3   :   listdata3,
+        Title4   :   htmltitle4,
+        PageNext4:   pn4,
+        Todos4   :   listdata4,
+        Title5   :   htmltitle5,
+        PageNext5:   pn5,
+        Todos5   :   listdata5,
+        Title6   :   htmltitle6,
+        PageNext6:   pn6,
+        Todos6   :   listdata6,
+        Title7   :   htmltitle7,
+        PageNext7:   pn7,
+        Todos7   :   listdata7,
+    }
+    showInfo( "FRONTAL-LIST: showing data"  )
+    tmpl.Execute(w, formData)
 }
 
 //MEDIAINFO SHOW INFO
@@ -659,6 +840,97 @@ func mediaPlaySubLoad(w http.ResponseWriter, r *http.Request) {
         }
         showInfo( "MEDIAINFO-LOADSUB: showing data" )
         fmt.Fprintf(w, msginfo)
+    }
+}
+
+//LIVETV LIST
+
+func liveTVList(w http.ResponseWriter, r *http.Request) {
+    if checkBaseActionAuth(w, r, "LIVETV-BASE") == false {
+        //Invalid IP or user
+    } else {
+        listdata := sqlite_getMediaLiveAll()
+        htmltitle := "LiveTV List"
+        //get files and add tags
+        for k, midata := range listdata {
+            taglist := strings.Join( fscrap_getFileTags( midata[ "url" ] ), " " )
+            //showInfo( "MEDIAINFO-LIST-TAGS: " + taglist + " => " + midata[ "file" ] )
+            listdata[k]["Tags"] = taglist
+        }
+        showInfo( "LIVETV-BASE-DATANUM:" + intToStr(len(listdata)) )
+        tmpl := template.Must(template.ParseFiles("html/item.livetv.list.html"))
+        menu := getMenu(w, r)
+        formData := listBaseTemp{
+            Menu    :   template.HTML( menu ),
+            Title   :   htmltitle,
+            Todos   :   listdata,
+            //PageBack:   pb,
+            //PageNext:   pn,
+            //Genre   :   genre,
+            //Actor   :   actor,
+            //Search  :   search,
+        }
+        showInfo( "LIVETV-BASE: showing data" )
+        tmpl.Execute(w, formData)
+    }
+}
+
+func liveTVPlayer(w http.ResponseWriter, r *http.Request) {
+    if checkBaseActionAuth(w, r, "LIVETV-PLAYER") == false {
+        //Invalid IP or user
+    } else {
+        //Params: id : idmedialive
+        id := getParam(r, "id")
+        showInfo( "LIVETV-PLAYER: " + id  )
+        tmpl := template.Must(template.ParseFiles("html/item.livetv.player.html"))
+        listdata := sqlite_getMediaLiveID( id )
+        menu := getMenu(w, r)
+        formData := playerListTemp{
+            Menu        :   template.HTML( menu ),
+            Title       :   "Media Player",
+            Todos       :   listdata,
+            //Actors    :   actorslist2,
+            //Related   :   relatedMediaInfo,
+            //Genres    :   genres2,
+            //Codecs      :   G_PLAYER_CODECS,
+            //FileTime    :   filetime,
+            //PrevPlayed  :   prevplayedtime,
+            //TracksAudio :   tracksaudio,
+            //TracksSubs  :   trackssub,
+            //TracksSubsL :   trackssub2,
+        }
+        tmpl.Execute(w, formData)
+    }
+}
+
+func liveTVPlayTime(w http.ResponseWriter, r *http.Request) {
+    if checkBaseActionAuth(w, r, "LIVETV-BASE") == false {
+        //Invalid IP or user
+    } else  if r.Method == http.MethodHead {
+        //Exclude HEAD request
+        showInfo( "LIVETV-PLAYTIME: Exclude HEAD request." )
+    } else {
+        //Params: 
+        //id:idmedialive
+        //timeplayed : int
+        //mode : G_PLAYER_CODECS[mode]
+        //audiotrack : int
+        //subtrack : int
+        //quality : sd|hd
+        id := getParam(r, "id")
+        timeplayed := getParam(r, "timeplayed")
+        mode := getParam(r, "mode")
+        audiotrack := getParam(r, "audiotrack")
+        subtrack := getParam(r, "subtrack")
+        quality := getParam(r, "quality")
+        showInfo( "LIVETV-PLAYTIME: " + id  )
+        listdata := sqlite_getMediaLiveID( id )
+        if listdata[ 0 ][ "url" ] != "" {
+            showInfo( "LIVETV-PLAYTIME: send file: " + listdata[ 0 ][ "url" ] )
+            sendVideo(w, r, listdata[ 0 ][ "url" ], timeplayed, mode, audiotrack, subtrack, quality)
+        } else {
+            showInfo( "LIVETV-PLAYTIME: send file ERROR: " + listdata[ 0 ][ "url" ] )
+        }
     }
 }
 
@@ -1387,7 +1659,7 @@ func ipWlRemove(w http.ResponseWriter, r *http.Request) {
         //Invalid IP or user or admin
     } else {
         sqlite_log_insert( "ip-whitelist-delete", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
-        //params post: username, pass1, pass2, useradmin
+        //params post: ip = IP
         fip := getParam( r, "ip" )
 
         if len( fip ) == 0 {
@@ -1433,7 +1705,7 @@ func ipBansRemove(w http.ResponseWriter, r *http.Request) {
         //Invalid IP or user or admin
     } else {
         sqlite_log_insert( "ip-bans-delete", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
-        //params post: username, pass1, pass2, useradmin
+        //params post: id = ipbans
         fip := getParam( r, "ip" )
 
         if len( fip ) == 0 {
@@ -1470,6 +1742,153 @@ func ipBansAdd(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+//LIVETV
+
+func liveTVAdminList(w http.ResponseWriter, r *http.Request) {
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+
+    if checkBaseActionAuthAdmin(w, r, "LIVETV-LIST") == false {
+        //Invalid IP or user or admin
+    } else {
+        tmpl := template.Must(template.ParseFiles("html/livetv.list.html"))
+        sqlite_log_insert( "livetv-list", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //search := getParam(r, "search")
+        listdata := sqlite_getMediaLiveAll()
+        menu := getMenu(w, r)
+        formData := listMedia{
+            Menu    :   template.HTML( menu ),
+            Title   :   "LiveTV List",
+            //Todos   :   mapMediaToSlice( listdata ),
+            Todos   :   listdata,
+        }
+        //fmt.Println( listdata )
+        //fmt.Println( mapsMediaKeyOrder( listdata ) )
+        showInfo( "LIVETV-LIST: showing data"  )
+        tmpl.Execute(w, formData)
+    }
+}
+
+func liveTVAdminRemove(w http.ResponseWriter, r *http.Request) {
+    var msginfo string
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionAuthAdmin(w, r, "LIVETV-DELETE") == false {
+        //Invalid IP or user or admin
+    } else {
+        sqlite_log_insert( "livetv-delete", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //params post: id = idmedialive
+        id := getParam( r, "id" )
+
+        if len( id ) == 0 {
+            msginfo = "Invalid IDMEDIALIVE: " + id
+        }else  {
+            sqlite_medialive_delete( id )
+            msginfo = "LIVETV Deleted: " + id
+        }
+        showInfo( "LIVETV-ADMIN-LIST-DELETE: showing data"  )
+        fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
+func liveTVAdminAdd(w http.ResponseWriter, r *http.Request) {
+    var msginfo string
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionAuthAdmin(w, r, "LIVETV-ADD") == false {
+        //Invalid IP or user or admin
+    } else {
+        sqlite_log_insert( "livetv-add", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //params post: username, pass1, pass2, useradmin
+        data := getParamPost( r, "data" )
+        showInfo( "LIVETV-ADMIN-LIST-ADD: " + intToStr(len(data)) )
+        //Extract data
+        added, exist, errors, total := liveTvDataAdd( data )
+        msginfo = "URLs Added (added/exist/errors/total): " + intToStr(added) + "/" + intToStr(exist) + "/" + intToStr(errors) + "/" + intToStr(total)
+        showInfo( "LIVETV-ADMIN-LIST-ADD: showing data"  )
+        fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
+func liveTVAdminCheck(w http.ResponseWriter, r *http.Request) {
+    var msginfo string
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionAuthAdmin(w, r, "LIVETV-CHECK") == false {
+        //Invalid IP or user or admin
+    } else {
+        sqlite_log_insert( "livetv-check", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //params post: id = idmedialive, clean = 1
+        id := getParam( r, "id" )
+        clean := getParam( r, "clean" )
+
+        if len( id ) == 0 {
+            msginfo = "Invalid IDMEDIALIVE: " + id
+        } else {
+            medialive := sqlite_getMediaLiveID(id)
+            if len(medialive) > 0 {
+                codec := ffprobeVideoCodec( medialive[0]["url"] )
+                if codec != "NOCODEC" {
+                    msginfo = "VALID IDMEDIALIVE: " + id + " => " + codec
+                } else {
+                    msginfo = "Invalid IDMEDIALIVE url: " + id
+                    if len(clean) > 0 {
+                        msginfo = "<br />DELETE IDMEDIALIVE: " + id
+                        sqlite_medialive_delete( id )
+                    }
+                }
+            } else {
+                msginfo = "Not Exist IDMEDIALIVE: " + id
+            }
+        }
+        showInfo( "LIVETV-ADMIN-LIST-CHECK: showing data"  )
+        fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
+func liveTVAdminCheckAll(w http.ResponseWriter, r *http.Request) {
+    var msginfo string
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionAuthAdmin(w, r, "LIVETV-CHECKALL") == false {
+        //Invalid IP or user or admin
+    } else {
+        sqlite_log_insert( "livetv-check", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //params post: clean = 1
+        clean := getParam( r, "clean" )
+        medialive := sqlite_getMediaLiveAll()
+        total := len(medialive)
+        valid := 0
+        nerror := 0
+        for _, ml := range medialive {
+            //action := ""
+            codec := ffprobeVideoCodec( ml["url"] )
+            if codec != "NOCODEC" {
+                valid++
+                //action = "="
+            } else {
+                nerror++
+                if len(clean) > 0 {
+                    sqlite_medialive_delete( ml["idmedialive"] )
+                }
+                //action = "-"
+            }
+            //io.WriteString(w, action)
+            //w.(http.Flusher).Flush()
+        }
+        msginfo = "Result (valid/error/total): " + intToStr( valid ) + "/" + intToStr( nerror ) + "/" + intToStr( total )
+        if len(clean) > 0 {
+            msginfo = "<br />REMOVED: " + intToStr(nerror)
+        }
+        showInfo( "LIVETV-ADMIN-LIST-CHECKALL: showing data"  )
+        fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
 //MENU
 
 type menuListElement map[int]map[string]string //{ 0: { "title": "", "url": "", "admin" : false } },
@@ -1501,6 +1920,7 @@ func getMenu( w http.ResponseWriter, r *http.Request ) string {
         listdata[ len(listdata) ] = map[string]string{ "title" : "CronInfo", "url" : "/cron-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "Identify", "url" : "/media-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "MediaInfo", "url" : "/mediainfo-list/?", "admin" : "1" }
+        listdata[ len(listdata) ] = map[string]string{ "title" : "LiveTV", "url" : "/livetv-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "Played", "url" : "/played-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "Users", "url" : "/users-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "IPs", "url" : "/ip-list/?", "admin" : "1" }
@@ -1528,14 +1948,29 @@ func getMenu( w http.ResponseWriter, r *http.Request ) string {
 
 func testBase( w http.ResponseWriter, r *http.Request ){
     //TEST CODE
-    x := "0"
-    y := "0"
-    z := "00:01:02.600 --> 00:01:08.869"
-    fmt.Println( x )
     //cronImagesLink()
     //cronShortRun()
-    x = floatToStr(float64(subToJsonGetTime(z, 0)))
-    y = floatToStr(float64(subToJsonGetTime(z, 1)))
+    /*
+    data := `#EXTM3U
+
+#EXTINF:-1 tvg-logo="http://127.0.0.1/" group-title="Without category", hbo2 dual (eng esp) www.m3ugratis.com
+http://161.0.157.5/PLTV/88888888/224/3221227026/index.m3u8
+
+#EXTINF:-1 tvg-logo="http://puu.sh/mb4wQ/6cd02167d4.png" group-title="CINE", Fox Cinema www.m3ugratis.com
+http://161.0.157.7/PLTV/88888888/224/3221226793/03.m3u8
+
+#EXTINF:-1 tvg-logo="http://photocall.tv/images/fighttime.png" group-title="Deportes", Fight Time
+http://node01.openfutbol.es/SVoriginOperatorEdge/128761.smil/.m3u8
+
+#EXTINF:-1 tvg-logo="https://i.imgur.com/x5jNF2N.png" group-title="Deportes", MLB
+http://mlblive-akc.mlb.com/ls01/mlbam/mlb_network/NETWORK_LINEAR_1/master_wired.m3u8
+`
+    liveTvDataAdd(data)
+    */
+    //x, y := ffprobeSize( "http://212.104.160.156:1935/live/lebrijatv2/playlist2.m3u8?wowzasessionid=1758058924.m3u8" )
+    x := ""
+    y := ""
+    z := ""
     info := "ENDED: " + x + " -- " + y + " -- " + z
     fmt.Fprintf(w, "DATA: %s\n", info)
 }

@@ -1,16 +1,4 @@
 $(function () {
-    //IMG LAZYLOAD
-    //$("img.lazy").Lazy();
-    /*
-    //float header size
-    if( $( '.menuBox' ).is(":visible") ){
-        $( 'body' ).css("padding-top", $( '.menuBox' ).height() + "px");
-    }else{
-        $( 'body' ).css("padding-top", $( '.menuBoxMS' ).height() + "px");
-    }
-    */
-    //$( ".eMenuBox" ).remove();
-    
     $( window ).on( 'beforeunload', function(){
 		$.ajax({
 			url : '/media-play-settime/?id=' + idmedia + '&timeplayed=' + parseInt( $( '#slideTime' ).val() ) + "&timemax=" + totaltime,

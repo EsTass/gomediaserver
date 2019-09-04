@@ -481,6 +481,18 @@ func sqlite_getLogsFilter(search string) map[int]map[string]string {
     return result
 }
 
+func sqlite_getLogsLogins( ip string ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqle := ""
+    sqle += " WHERE action LIKE 'login-KO' "
+    sqle += " AND ip LIKE '" + sqlite_encodeStrign(ip) + "' "
+    sqle += " AND logs.date > DATETIME(CURRENT_TIMESTAMP, '-5 minutes') "
+    sqlselect := "SELECT * FROM logs " + sqle + " ORDER BY date DESC LIMIT 1000"
+    result = sqlite_map_logs( sqlselect )
+    
+    return result
+}
+
 //MEDIA ELEMENTS
 
 //idmedia, file, langs, subs, idmediainfo
@@ -1099,6 +1111,18 @@ func sqlite_getMediaInfoMediaInfoIDLast( id string ) map[int]map[string]string {
     return result
 }
 
+func sqlite_getMediaMediaInfoRelatedID( id string ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    
+    mi := sqlite_getMediaInfoID( id )
+    if len(mi) > 0 {
+        genres := strings.Split(mi[0]["genre"], ",")
+        result = sqlite_getMediaMediaInfoRelated(id, genres)
+    }
+    
+    return result
+}
+
 func sqlite_getMediaMediaInfoRelated( id string, genre []string ) map[int]map[string]string {
     result := map[int]map[string]string {}
     
@@ -1153,6 +1177,35 @@ func sqlite_getMediaInfoMediaInfoChaptersNext( title string, year string ) map[i
     result := map[int]map[string]string {}
     
     sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE mediainfo.title LIKE '" + sqlite_encodeStrign(title) + "' AND mediainfo.year LIKE '" + sqlite_encodeStrign(year) + "' AND media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL GROUP BY mediainfo.idmediainfo ORDER BY season, episode ASC LIMIT 1000"
+    result = sqlite_map_mediamediainfo( sqlselect )
+    
+    return result
+}
+
+//MEDIAINFO FRONTAL LISTS
+
+func sqlite_getMediaMediaInfo_Premiere( size int ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL AND mediainfo.sorttitle < DATETIME(CURRENT_DATE, '-3 months') GROUP BY mediainfo.title ORDER BY mediainfo.sorttitle DESC LIMIT " + intToStr( size )
+    showInfo( "MEDIAINFOLIST-SQL: " + sqlselect )
+    result = sqlite_map_mediamediainfo( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaMediaInfo_PremiereBR( size int ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL AND mediainfo.sorttitle < DATETIME(CURRENT_DATE, '-3 months') GROUP BY mediainfo.title ORDER BY mediainfo.sorttitle DESC LIMIT " + intToStr( size )
+    showInfo( "MEDIAINFOLIST-SQL: " + sqlselect )
+    result = sqlite_map_mediamediainfo( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaMediaInfo_PremiereSeries( size int ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL AND ( mediainfo.sorttitle < DATETIME(CURRENT_DATE, '-3 months')  OR ( date( date( mediainfo.sorttitle, printf( '+%d years', mediainfo.season ) ), printf( '+%d days', ( mediainfo.episode * 7 ) ) ) ) > DATETIME(CURRENT_DATE, '-3 months') ) AND mediainfo.episode != '' AND mediainfo.season != '' GROUP BY mediainfo.title ORDER BY mediainfo.sorttitle DESC, mediainfo.season DESC, mediainfo.episode DESC LIMIT " + intToStr( size )
+    showInfo( "MEDIAINFOLIST-SQL: " + sqlselect )
     result = sqlite_map_mediamediainfo( sqlselect )
     
     return result
@@ -1246,6 +1299,14 @@ func sqlite_getPlayed() map[int]map[string]string {
 func sqlite_getPlayedMediaInfo() map[int]map[string]string {
     result := map[int]map[string]string {}
     sqlselect := "SELECT * FROM played LEFT JOIN media ON played.idmedia = media.idmedia LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 ORDER BY date DESC LIMIT 100"
+    result = sqlite_map_playedext( sqlselect )
+    
+    return result
+}
+
+func sqlite_getPlayedMediaInfoLimit( size string ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM played LEFT JOIN media ON played.idmedia = media.idmedia LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 ORDER BY date DESC LIMIT " + size
     result = sqlite_map_playedext( sqlselect )
     
     return result
@@ -1489,7 +1550,7 @@ func sqlite_playing_clean(){
 	}
 	defer db.Close()
     
-    stmt, err := db.Prepare("DELETE FROM playing WHERE date < DATETIME(CURRENT_DATE, '-200 minutes')")
+    stmt, err := db.Prepare("DELETE FROM playing WHERE date < DATETIME(CURRENT_TIMESTAMP, '-200 minutes')")
 	if err != nil {
 		showInfoError(err)
 	}
@@ -1761,6 +1822,286 @@ func sqlite_bans_clean(){
 	}
 	defer stmt.Close()
     _, err = stmt.Exec()
+    if err != nil {
+        showInfoError(err)
+    }
+}
+
+//MEDIALIVE ELEMENTS
+
+//idmedialive, title, url, poster, date
+
+func sqlite_map_medialive( sqlselect string ) map[int]map[string]string {
+    // the map key is the field name
+    result := map[int]map[string]string {}
+    
+	db, err := sql.Open( "sqlite3", G_SQLFILE )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer db.Close()
+    
+	rows, err := db.Query( sqlselect )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer rows.Close()
+    numrow := 0
+	for rows.Next() {
+		var idmedialive, title, url, poster, date string
+        err = rows.Scan(&idmedialive, &title, &url, &poster, &date)
+		if err != nil {
+			showInfoError(err)
+		}
+        //format date
+        layout := "2006-01-02T15:04:05Z"
+        t, _ := time.Parse(layout, date)
+        date = t.Format( "2006-01-02 15:04:05" )
+        result[ numrow ] = map[string]string{ "idmedialive": idmedialive, "title": title, "url": url, "poster": poster, "date": date }
+        numrow++
+	}
+	err = rows.Err()
+	if err != nil {
+		showInfoError(err)
+	}
+    
+    return result
+}
+
+func sqlite_getMediaLiveAll() map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM medialive ORDER BY idmedialive DESC"
+    result = sqlite_map_medialive( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaLive( size string ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM medialive ORDER BY idmedialive DESC LIMIT " + size
+    result = sqlite_map_medialive( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaLiveID( id string ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    if _, err := strconv.Atoi(id); err == nil {
+        sqlselect := "SELECT * FROM medialive WHERE idmedialive = " + id + " ORDER BY idmedialive DESC LIMIT 1"
+        result = sqlite_map_medialive( sqlselect )
+    }
+    
+    return result
+}
+
+func sqlite_checkMediaLiveID( id string ) bool {
+    result := false
+    
+    if _, err := strconv.Atoi(id); err == nil {
+        sqlselect := "SELECT * FROM medialive WHERE idmedialive = " + id + " ORDER BY idmedialive DESC LIMIT 1"
+        data := sqlite_map_medialive( sqlselect )
+        if len(data) > 0 && data[ 0 ][ "idmedialive" ] == id {
+            result = true
+        }
+    }
+    
+    return result
+}
+
+func sqlite_checkMediaLiveURLURL( url string ) bool {
+    result := false
+    
+    sqlselect := "SELECT * FROM medialive WHERE url LIKE '" + sqlite_encodeStrignFile(url) + "' ORDER BY idmedialive DESC LIMIT 1"
+    data := sqlite_map_medialive( sqlselect )
+    if len(data) > 0 && data[ 0 ][ "url" ] == url {
+        result = true
+    }
+    
+    return result
+}
+
+func sqlite_medialive_insert( title string, url string, poster string ) int {
+    result := 0
+    
+	db, err := sql.Open( "sqlite3", G_SQLFILE )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer db.Close()
+    
+    stmt, err := db.Prepare("INSERT or IGNORE into medialive(idmedialive, title, url, poster, date) values(NULL, ?, ?, ?, ?)")
+	if err != nil {
+		showInfoError(err)
+	}
+	defer stmt.Close()
+    //idmedia := nil
+    date := time.Now().Format("2006-01-02 15:04:05")
+    rr, err := stmt.Exec( title, url, poster, date )
+    if err != nil {
+        showInfoError(err)
+    } else {
+        id, err := rr.LastInsertId()
+        if err != nil {
+            showInfoError(err)
+        } else {
+            result = int(id)
+        }
+    }
+    
+    return result
+}
+
+func sqlite_medialive_delete( id string ){
+	db, err := sql.Open( "sqlite3", G_SQLFILE )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer db.Close()
+    
+    stmt, err := db.Prepare("DELETE FROM medialive WHERE idmedialive = ?")
+	if err != nil {
+		showInfoError(err)
+	}
+	defer stmt.Close()
+    _, err = stmt.Exec( id )
+    if err != nil {
+        showInfoError(err)
+    } else {
+        //remove files
+        imgfile := pathJoin(G_IMAGES_FOLDER, id + ".livetv")
+        if fileExist( imgfile ) {
+            fileRemove(imgfile)
+        }
+    }
+}
+
+//MEDIALIVEURLS ELEMENTS
+
+//idmedialiveurls, title, url, date
+
+func sqlite_map_medialiveurls( sqlselect string ) map[int]map[string]string {
+    // the map key is the field name
+    result := map[int]map[string]string {}
+    
+	db, err := sql.Open( "sqlite3", G_SQLFILE )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer db.Close()
+    
+	rows, err := db.Query( sqlselect )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer rows.Close()
+    numrow := 0
+	for rows.Next() {
+		var idmedialiveurls, title, url, date string
+        err = rows.Scan(&idmedialiveurls, &title, &url, &date)
+		if err != nil {
+			showInfoError(err)
+		}
+        //format date
+        layout := "2006-01-02T15:04:05Z"
+        t, _ := time.Parse(layout, date)
+        date = t.Format( "2006-01-02 15:04:05" )
+        result[ numrow ] = map[string]string{ "idmedialiveurls": idmedialiveurls, "title": title, "url": url, "date": date }
+        numrow++
+	}
+	err = rows.Err()
+	if err != nil {
+		showInfoError(err)
+	}
+    
+    return result
+}
+
+func sqlite_getMediaLiveURLAll() map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM medialiveurls ORDER BY idmedialiveurls DESC"
+    result = sqlite_map_medialiveurls( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaLiveURL( size string ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM medialiveurls ORDER BY idmedialiveurls DESC LIMIT " + size
+    result = sqlite_map_medialiveurls( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaLiveURLID( id string ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    if _, err := strconv.Atoi(id); err == nil {
+        sqlselect := "SELECT * FROM medialiveurls WHERE idmedialiveurls = " + id + " ORDER BY idmedialiveurls DESC LIMIT 1"
+        result = sqlite_map_medialiveurls( sqlselect )
+    }
+    
+    return result
+}
+
+func sqlite_checkMediaLiveURLID( id string ) bool {
+    result := false
+    
+    if _, err := strconv.Atoi(id); err == nil {
+        sqlselect := "SELECT * FROM medialiveurls WHERE idmedialiveurls = " + id + " ORDER BY idmedialiveurls DESC LIMIT 1"
+        data := sqlite_map_medialiveurls( sqlselect )
+        if len(data) > 0 && data[ 0 ][ "idmedialiveurls" ] == id {
+            result = true
+        }
+    }
+    
+    return result
+}
+
+func sqlite_medialiveurl_insert( title string, url string ) int {
+    result := 0
+    
+    
+	db, err := sql.Open( "sqlite3", G_SQLFILE )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer db.Close()
+    
+    stmt, err := db.Prepare("INSERT or IGNORE into medialiveurls(idmedialiveurls, title, url, date) values(NULL, ?, ?, ?)")
+	if err != nil {
+		showInfoError(err)
+	}
+	defer stmt.Close()
+    //idmedia := nil
+    date := time.Now().Format("2006-01-02 15:04:05")
+    //_, err = stmt.Exec( idmedia, file, langs, subs, idmediainfo )
+    rr, err := stmt.Exec( title, url, date )
+    if err != nil {
+        showInfoError(err)
+    } else {
+        id, err := rr.LastInsertId()
+        if err != nil {
+            showInfoError(err)
+        } else {
+            result = int(id)
+        }
+    }
+    
+    return result
+}
+
+func sqlite_medialiveurl_delete( id string ){
+	db, err := sql.Open( "sqlite3", G_SQLFILE )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer db.Close()
+    
+    stmt, err := db.Prepare("DELETE FROM medialiveurls WHERE idmedialiveurls = ?")
+	if err != nil {
+		showInfoError(err)
+	}
+	defer stmt.Close()
+    _, err = stmt.Exec( id )
     if err != nil {
         showInfoError(err)
     }

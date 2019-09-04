@@ -290,6 +290,10 @@ func main() {
     serverdata.HandleFunc("/mediainfo-img/", mediainfoImg)
     serverdata.HandleFunc("/mediainfo-download/", mediainfoDownload)
     
+    serverdata.HandleFunc("/livetv/", liveTVList)
+    serverdata.HandleFunc("/livetv-player/", liveTVPlayer)
+    serverdata.HandleFunc("/livetv-play-time/", liveTVPlayTime)
+    
     serverdata.HandleFunc("/actor-img/", actorImg)
     
     serverdata.HandleFunc("/media-player/", mediaPlayer)
@@ -311,6 +315,12 @@ func main() {
     //Mediainfo
     serverdata.HandleFunc("/mediainfo-list/", mediaInfoListIdent)
     serverdata.HandleFunc("/mediainfo-e-delete/", mediaInfoListIdentDelete)
+    //LiveTV
+    serverdata.HandleFunc("/livetv-list/", liveTVAdminList)
+    serverdata.HandleFunc("/livetv-e-delete/", liveTVAdminRemove)
+    serverdata.HandleFunc("/livetv-e-add/", liveTVAdminAdd)
+    serverdata.HandleFunc("/livetv-e-check/", liveTVAdminCheck)
+    serverdata.HandleFunc("/livetv-all-check/", liveTVAdminCheckAll)
     //Users
     serverdata.HandleFunc("/users-list/", usersListBase)
     serverdata.HandleFunc("/users-add/", usersListAdd)

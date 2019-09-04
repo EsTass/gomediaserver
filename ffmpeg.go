@@ -69,6 +69,20 @@ func sendVideo(w http.ResponseWriter, r *http.Request, file string, timeplayed s
         subtrack2 = ""
     }
     
+    //CHECK LIVETV .ts mode
+    var liveparams1, liveparams2, liveparams3, liveparams4 string
+    if strEndWith( file, ".ts" ) {
+        liveparams1 = "-fflags"
+        liveparams2 = "+genpts"
+        liveparams3 = "-stream_loop"
+        liveparams4 = "-1"
+    } else {
+        liveparams1 = ""
+        liveparams2 = ""
+        liveparams3 = ""
+        liveparams4 = ""
+    }
+    
     //mode
     switch mode {
         case "direct":
@@ -97,6 +111,44 @@ func sendVideo(w http.ResponseWriter, r *http.Request, file string, timeplayed s
                 
             }
             headercontent = "video/matroska"
+        case "livetv":
+            args = []string{
+                "-nostdin", 
+                liveparams1,
+                liveparams2,
+                liveparams3,
+                liveparams4,
+                "-i", 
+                file,
+                "-c:v", 
+                "libvpx", 
+                "-threads",
+                "0",
+                "-quality",
+                "realtime",
+                "-b:v",
+                qmin,
+                "-maxrate",
+                qmax,
+                "-bufsize",
+                "1000k",
+                "-pix_fmt",
+                "yuv420p",
+                scale1,
+                scale2,
+                "-aspect",
+                "16:9",
+                "-preset",
+                "baseline",
+                "-level",
+                "3.0",
+                "-c:a",
+                "libvorbis",
+                "-f",
+                "webm",
+                "-",
+            }
+            headercontent = "video/webm"
         case "mp4":
             args = []string{
                 "-nostdin", 
