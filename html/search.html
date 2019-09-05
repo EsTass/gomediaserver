@@ -1,0 +1,133 @@
+<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>
+<html lang='En' xml:lang='En' xmlns='http://www.w3.org/1999/xhtml'>
+<head>
+	
+	<title>GMS</title>
+
+	<base href="">
+	
+	<meta charset="utf-8">
+	<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
+	<meta http-equiv='X-UA-Compatible' content='IE=8' />
+	<meta http-equiv='Pragma' content='no-cache' />
+	<meta http-equiv='Expires' content='-1' />
+    <meta name="referrer" content="no-referrer" />
+	
+	<meta name='Keywords' content='' />
+	<meta name='Description' content='' />
+	<meta name='robots' content='nofollow' />
+	<meta name='author' content='GMS' />
+	
+	<script src="/assets/jquery-3.2.1.min.js"></script>
+    <script src="/assets/init.js"></script>
+    
+	<link type='image/x-icon' href='/assets/favicon.ico' rel='shortcut icon' />
+	
+	<link rel="stylesheet" href="/assets/index.css" />
+    <link rel="stylesheet" href="/assets/index_extra.css" />
+</head>
+
+<body>
+    
+    {{.Menu}}
+    
+    <div class='dBaseBox'>
+        <div class='boxList'>
+            <h2>{{.Title}}</h2>
+            
+            <form id="fSearch" method="post" action="/search-list/" class="trSearch">
+                <br />
+                <table class='widthFull'>
+                    <tr class='trSearch'>
+                        <td>
+                            Search Title: 
+                            <input name='search' id='search' value='' 
+                            list="search-dlist2" autocomplete="off"
+                            />
+                            <datalist id="search-dlist2"></datalist>
+                        </td>
+                        <td>
+                            Year (Min):
+                            <select id='year' name='year'>
+                                <option value=''></option>
+                                {{range .Years}}
+                                <option value='{{.}}'>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </td>
+                        <td>
+                            Year (Max):
+                            <select id='year2' name='year2'>
+                                <option value=''></option>
+                                {{range .Yearsi}}
+                                <option value='{{.}}'>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </td>
+                        <td>
+                            Rating:
+                            <select id='rating' name='rating'>
+                                <option value=''></option>
+                                {{range .Ratings}}
+                                <option value='{{.}}'>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </td>
+                        <td>
+                            Genre:
+                            <select id='genre1' name='genre1'>
+                                <option value=''></option>
+                                {{range .Genres}}
+                                <option value='{{.}}'>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </td>
+                        <td>
+                            Genre:
+                            <select id='genre2' name='genre2'>
+                                <option value=''></option>
+                                {{range .Genres}}
+                                <option value='{{.}}'>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </td>
+                        <td>
+                            Genre:
+                            <select id='genre3' name='genre3'>
+                                <option value=''></option>
+                                {{range .Genres}}
+                                <option value='{{.}}'>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </td>
+                        <td>
+                            Order By:
+                            <select id='orderby' name='orderby'>
+                                {{range .Orderby}}
+                                <option value='{{.}}'>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </td>
+                        <td>    
+                            <input onclick='g_post_form("/search-list/", "fSearch", "dResultSearchExt")' type='button' id='bSearch' name='bSearch' value='Search' />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan=100>
+                            &nbsp;
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan=100>
+                            <div id='dResultSearchExt'></div>
+                        </td>
+                    </tr>
+                </table>
+                <br />
+            </form>
+            
+        </div>
+    </div>
+
+</body>
+</html>

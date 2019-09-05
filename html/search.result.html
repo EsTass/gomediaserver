@@ -1,0 +1,22 @@
+
+    <div class='dBaseBox'>
+        <div class='boxList'>
+            <h2>{{.Title}}</h2>
+            
+            {{range .Todos}}
+            <div class='listElement'>
+                {{if .Tags}}
+                <div style="position:absolute;top:1;right:0;background-color: blue !important;">
+                    {{.Tags}}
+                </div>
+                {{end}}
+                {{if .season}}
+                <a href='/mediainfo-chapters/?id={{.idmediainfo}}' title='{{.title}}'><img title='{{.title}}: {{.plot}}' class='listElementImg lazy' data-src='' src='/mediainfo-img/?id={{.idmediainfo}}' /><span class=''>{{.title}} ({{.year}}{{if .rating}} &#x2605;{{.rating}}{{end}})</span></a>
+                {{else}}
+                <a href='/mediainfo/?id={{.idmediainfo}}' title='{{.title}}'><img title='{{.title}}: {{.plot}}' class='listElementImg lazy' data-src='' src='/mediainfo-img/?id={{.idmediainfo}}' /><span class=''>{{.title}}  ({{.year}}{{if .rating}} &#x2605;{{.rating}}{{end}})</span></a>
+                {{end}}
+            </div>
+            {{end}}
+
+        </div>
+    </div>

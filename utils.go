@@ -419,7 +419,7 @@ func getFiles( folder string, extension string ) []string {
     return result
 }
 
-//FILES ON FOLDER
+//FOLDERS ON FOLDER
 
 func getFolders( folder string ) []string {
     var result []string
@@ -829,4 +829,39 @@ func fileHash( file string ) string {
         result = fmt.Sprintf("%x", sum)
     }
     return result
+}
+
+//FILE MODIF TIME
+
+func fileModifTime( filename string ) time.Time {
+    result := time.Now()
+     file, err := os.Stat(filename)
+
+     if err != nil {
+        showInfoError(err)     
+     } else {
+         result = file.ModTime()
+     }
+
+     return result
+}
+
+//DIR SIZE
+
+func dirSizeMB(path string) float64 {
+    var dirSize int64 = 0
+
+    readSize := func(path string, file os.FileInfo, err error) error {
+        if !file.IsDir() {
+            dirSize += file.Size()
+        }
+
+        return nil
+    }
+
+    filepath.Walk(path, readSize)    
+
+    sizeMB := float64(dirSize) / 1024.0 / 1024.0
+
+    return sizeMB
 }

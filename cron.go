@@ -7,6 +7,7 @@ import (
     //"fmt"
     "log"
     "strings"
+    "time"
     
     //go get "github.com/robfig/cron"
     "github.com/robfig/cron"
@@ -41,6 +42,9 @@ func cronShortRun(){
     //add new files
     cronAddNewFiles()
     
+    //Clean Not Existant Files
+    //cronCleanFiles()
+    
     //Clean Temp Folders
     cronCleanTempFolders()
     
@@ -58,13 +62,8 @@ func cronLongRun(){
     fileRemove( G_CRONLONGTIME_FILE )
     fileAppendLine( G_CRONLONGTIME_FILE, "Cron LONG START: " + dateGetNow() + "\n" )
     
-    //Clean Not Existant Files
-    //cronCleanFiles()
-    
     //Clean playing
     cronCleanPlaying()
-    
-    //Add mediainfo images
     
     //Link same images
     cronImagesLink()
@@ -79,22 +78,28 @@ func cronLongRun(){
     //Clean downloaded media duply
     
     //Clean downloaded media not identified
+    cronCleanMediaNotIdent()
     
     //Clean Mediainfo duplys
-    
-    //Complete mediainfo images
-    
-    //Get Own Searchs and pass to webscrapp downloader
+    cronCleanMediaInfoDuplys()
     
     //Compressed Files
     
     //Free space on low
     
     //Clean low size old directories/files
+    cronCleanDirsLowSize()
     
-    //LiveTV Clean && Update (TODO, more time)
+    //Complete mediainfo images
+    cronMediaInfoCompleteImgs()
+    
+    //Get Own Searchs and pass to webscrapp downloader
+    
+    //Add mediainfo images
     
     //Sites Scrap
+    
+    //LiveTV Clean && Update (TODO, more time)
     
     fileAppendLine( G_CRONLONGTIME_FILE, "Cron LONG ENDED: " + dateGetNow() )
     showInfo( "CRON-LONG-ENDED: " + dateGetNow() )
@@ -256,4 +261,79 @@ func cronImagesLink() {
         }
     }
     fileAppendLine( G_CRONLONGTIME_FILE, ":: END Duply Images IP: " + dateGetNow() )
+}
+
+//Clean not ident files
+
+func cronCleanMediaNotIdent() {
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Clean Not Ident Files: " + dateGetNow() )
+    fileAppendLine( G_CRONLONGTIME_FILE, "" )
+    media := sqlite_getMediaIdentBad( 1000 )
+    tcomp := time.Now().Add(time.Hour * time.Duration((24 * G_DOWN_SAFEDAYS * -1)))
+    for _, m := range media {
+        if fileExist(m["file"]) && fileModifTime(m["file"]).Before(tcomp) {
+            sqlite_media_delete(m["idmedia"])
+            fileRemove(m["file"])
+            fileAppendLine( G_CRONLONGTIME_FILE, "-- Delete: " + filepath.Base(m["file"]) )
+        }
+    }
+    fileAppendLine( G_CRONLONGTIME_FILE, ":: END Clean Not Ident Files: " + dateGetNow() )
+}
+
+//Clean MediaInfo Duplys
+
+func cronCleanMediaInfoDuplys() {
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Clean MediaInfo Duplys: " + dateGetNow() )
+    fileAppendLine( G_CRONLONGTIME_FILE, "" )
+    mediainfo := sqlite_getMediaInfoDuplys()
+    for _, mi := range mediainfo {
+        fileAppendLine( G_CRONLONGTIME_FILE, "-- FINDED: " + mi["title"] + "/" + mi["year"] + "/" + mi["season"] + "/" + mi["episode"] + "/" )
+        mediainfo2 := sqlite_getMediaInfoExist( mi["title"], mi["year"], mi["season"], mi["episode"] )
+        for _, mi2 := range mediainfo2 {
+            if mi2["idmediainfo"] != mi["idmediainfo"] && mi2["title"] == mi["title"] && mi2["year"] == mi["year"] && mi2["season"] == mi["season"] && mi2["episode"] == mi["episode"] {
+                fileAppendLine( G_CRONLONGTIME_FILE, "-- SET: " + mi2["idmediainfo"] + " => " + mi["idmediainfo"] )
+                sqlite_mediainfo_delete(mi2["idmediainfo"])
+                sqlite_media_change_mediainfo(mi2["idmediainfo"], mi["idmediainfo"])
+            }
+        }
+    }
+    fileAppendLine( G_CRONLONGTIME_FILE, ":: END Clean MediaInfo Duplys: " + dateGetNow() )
+}
+
+//Clean Dirs low size on downloads folder
+
+func cronCleanDirsLowSize() {
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Clean Low Size Dirs: " + dateGetNow() )
+    fileAppendLine( G_CRONLONGTIME_FILE, "" )
+    
+    folders := getFolders(G_DOWNLOADS_FOLDER)
+    for _, path := range folders {
+        if fileExist( path ) && checkIsDir( path ) && sliceInString( path, G_DOWNLOADS_FOLDER_EXC ) == false && G_DOWN_DIRMINSIZE > 0 && dirSizeMB(path) <= float64(G_DOWN_DIRMINSIZE) {
+            fileAppendLine( G_CRONLONGTIME_FILE, "-- Delete Folder: " + path )
+            delTree(path)
+        }
+    }
+    
+    fileAppendLine( G_CRONLONGTIME_FILE, ":: END Clean Low Size Dirs: " + dateGetNow() )
+}
+
+//Complete series without images with chapter with image
+
+func cronMediaInfoCompleteImgs() {
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Complete Series Images: " + dateGetNow() )
+    fileAppendLine( G_CRONLONGTIME_FILE, "" )
+    mediainfo := sqlite_getMediaInfoSeriesAll()
+    for pos, mi := range mediainfo {
+        fileposter := pathJoin(G_IMAGES_FOLDER, mi["idmediainfo"] + ".poster")
+        if fileExist(fileposter) {
+            for pos2, mi2 := range mediainfo {
+                fileposter2 := pathJoin(G_IMAGES_FOLDER, mi2["idmediainfo"] + ".poster")
+                if pos2 > pos && mi2["title"] == mi["title"] && mi2["year"] == mi["year"] && fileExist(fileposter2) == false {
+                    copyImgsMediaInfo(mi["idmediainfo"], mi2["idmediainfo"])
+                    fileAppendLine( G_CRONLONGTIME_FILE, "++ Link Images: " + mi["title"] + " (" + mi["year"] + ") : " + mi["idmediainfo"] + " => " + mi2["idmediainfo"] )
+                }
+            }
+        }
+    }
+    fileAppendLine( G_CRONLONGTIME_FILE, ":: END Complete Series Images: " + dateGetNow() )
 }

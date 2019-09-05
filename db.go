@@ -700,6 +700,25 @@ func sqlite_media_clean_idmediainfo( idmediainfo string ){
     }
 }
 
+func sqlite_media_change_mediainfo( idmedianfoold string, idmediainfonew string ) {
+    
+	db, err := sql.Open( "sqlite3", G_SQLFILE )
+	if err != nil {
+		showInfoError(err)
+	}
+	defer db.Close()
+    
+    stmt, err := db.Prepare("UPDATE media SET idmediainfo = ? WHERE idmediainfo = ?")
+	if err != nil {
+		showInfoError(err)
+	}
+	defer stmt.Close()
+    _, err = stmt.Exec( idmediainfonew, idmedianfoold )
+    if err != nil {
+        showInfoError(err)
+    }
+}
+
 //MEDIAINFO ELEMENTS
 
 //idmediainfo, dateadded, title, sorttitle, season, episode, year, rating, votes, mpaa, tagline, runtime, plot, height, width, codec, imdbid, imdb, tmdbid, tmdb, tvdbid, tvdb, genre, actor, audio, subtitle, titleepisode
@@ -744,6 +763,14 @@ func sqlite_map_mediainfo( sqlselect string ) map[int]map[string]string {
 func sqlite_getMediaInfoAll() map[int]map[string]string {
     result := map[int]map[string]string {}
     sqlselect := "SELECT * FROM mediainfo ORDER BY idmediainfo DESC"
+    result = sqlite_map_mediainfo( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaInfoSeriesAll() map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM mediainfo WHERE season > 0 AND episode > 0 ORDER BY idmediainfo DESC"
     result = sqlite_map_mediainfo( sqlselect )
     
     return result
@@ -835,7 +862,7 @@ func sqlite_checkMediaInfoExist( title string, year string, season string, episo
     if len(season) > 0 {
         sqlselect += " AND season = " + season + " "
     } else {
-        sqlselect += " AND ( season IS NULL OR season = 0 OR season LIKE \"\" ) "
+        sqlselect += " AND ( season IS NULL OR season = 0 OR season LIKE '' ) "
     }
     if len(episode) > 0 {
         sqlselect += " AND episode = " + episode + " "
@@ -847,6 +874,26 @@ func sqlite_checkMediaInfoExist( title string, year string, season string, episo
     if len(data) > 0 && data[ 0 ][ "idmediainfo" ] != "" {
         result = strToInt( data[ 0 ][ "idmediainfo" ] )
     }
+    
+    return result
+}
+
+func sqlite_getMediaInfoExist( title string, year string, season string, episode string ) map[int]map[string]string {
+    var result map[int]map[string]string
+    
+    sqlselect := "SELECT * FROM mediainfo WHERE title LIKE '" + sqlite_encodeStrign(title) + "' AND year = " + year + ""
+    if len(season) > 0 {
+        sqlselect += " AND season = " + season + " "
+    } else {
+        sqlselect += " AND ( season IS NULL OR season = 0 OR season LIKE '' ) "
+    }
+    if len(episode) > 0 {
+        sqlselect += " AND episode = " + episode + " "
+    } else {
+        sqlselect += " AND ( episode IS NULL OR episode = 0 OR episode LIKE '' ) "
+    }
+    sqlselect += " ORDER BY idmediainfo DESC LIMIT 1"
+    result = sqlite_map_mediainfo( sqlselect )
     
     return result
 }
@@ -966,6 +1013,15 @@ func sqlite_mediainfo_delete( id string ){
         //unnasing idmedia
         sqlite_media_clean_idmediainfo( id )
     }
+}
+
+func sqlite_getMediaInfoDuplys() map[int]map[string]string {
+    result := map[int]map[string]string {}
+    
+    sqlselect := "SELECT * FROM mediainfo GROUP BY title, season, episode, year HAVING count( idmediainfo ) > 1 ORDER BY idmediainfo DESC LIMIT 1000 "
+    result = sqlite_map_mediainfo( sqlselect )
+    
+    return result
 }
 
 //MEDIA + MEDIAINFO ELEMENTS
@@ -1177,6 +1233,78 @@ func sqlite_getMediaInfoMediaInfoChaptersNext( title string, year string ) map[i
     result := map[int]map[string]string {}
     
     sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE mediainfo.title LIKE '" + sqlite_encodeStrign(title) + "' AND mediainfo.year LIKE '" + sqlite_encodeStrign(year) + "' AND media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL GROUP BY mediainfo.idmediainfo ORDER BY season, episode ASC LIMIT 1000"
+    result = sqlite_map_mediamediainfo( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaMediaInfoSearch( search string, yearmin string, yearmax string, rating string, genre1 string, genre2 string, genre3 string, orderby string ) map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := ""
+    subsqlselect := ""
+    sqlorderby := ""
+    
+    if len(search) > 0 {
+        subsqlselect += " AND ( title LIKE '%" + sqlite_encodeStrign(search) + "%' "
+        subsqlselect += " OR plot LIKE '%" + sqlite_encodeStrign(search) + "%' "
+        subsqlselect += " OR tagline LIKE '%" + sqlite_encodeStrign(search) + "%' "
+        subsqlselect += " OR file LIKE '%" + sqlite_encodeStrign(search) + "%' ) "
+    }
+    
+    if len(yearmin) > 0 {
+        subsqlselect += " AND year >= '" + sqlite_encodeStrign(yearmin) + "' "
+    }
+    if len(yearmax) > 0 {
+        subsqlselect += " AND year <= '" + sqlite_encodeStrign(yearmax) + "' "
+    }
+    
+    if len(rating) > 0 {
+        subsqlselect += " AND IFNULL(CAST(rating AS FLOAT), 5) >= CAST('" + sqlite_encodeStrign(rating) + "' AS FLOAT) "
+    }
+    
+    if len(genre1) > 0 {
+        pos := stringInSlicePos( genre1, G_GENRES )
+        if pos > -1 && len(G_GENRES_ADAPT) >= pos && len(G_GENRES_ADAPT[pos]) > 0 {
+            subsqlselect += " AND ( mediainfo.genre LIKE '%" + sqlite_encodeStrign(strings.TrimSpace(genre1)) + "%' OR mediainfo.genre LIKE '%" + sqlite_encodeStrign(G_GENRES_ADAPT[pos]) + "%' ) "
+        } else {
+            subsqlselect += " AND mediainfo.genre LIKE '%" + sqlite_encodeStrign(strings.TrimSpace(genre1)) + "%' "
+        }
+    }
+    if len(genre2) > 0 {
+        pos := stringInSlicePos( genre2, G_GENRES )
+        if pos > -1 && len(G_GENRES_ADAPT) >= pos && len(G_GENRES_ADAPT[pos]) > 0 {
+            subsqlselect += " AND ( mediainfo.genre LIKE '%" + sqlite_encodeStrign(strings.TrimSpace(genre2)) + "%' OR mediainfo.genre LIKE '%" + sqlite_encodeStrign(G_GENRES_ADAPT[pos]) + "%' ) "
+        } else {
+            subsqlselect += " AND mediainfo.genre LIKE '%" + sqlite_encodeStrign(strings.TrimSpace(genre2)) + "%' "
+        }
+    }
+    if len(genre3) > 0 {
+        pos := stringInSlicePos( genre3, G_GENRES )
+        if pos > -1 && len(G_GENRES_ADAPT) >= pos && len(G_GENRES_ADAPT[pos]) > 0 {
+            subsqlselect += " AND ( mediainfo.genre LIKE '%" + sqlite_encodeStrign(strings.TrimSpace(genre3)) + "%' OR mediainfo.genre LIKE '%" + sqlite_encodeStrign(G_GENRES_ADAPT[pos]) + "%' ) "
+        } else {
+            subsqlselect += " AND mediainfo.genre LIKE '%" + sqlite_encodeStrign(strings.TrimSpace(genre3)) + "%' "
+        }
+    }
+    
+    //"Last Added", "Premiere", "Rating", "Year", "Title"
+    switch orderby {
+        case "Premiere":
+            sqlorderby = " ORDER BY sorttitle DESC "
+        case "Rating":
+            sqlorderby = " ORDER BY rating DESC "
+        case "Year":
+            sqlorderby = " ORDER BY year DESC "
+        case "Title":
+            sqlorderby = " ORDER BY title ASC "
+        case "Last Added":
+            fallthrough
+        default:
+            sqlorderby = " ORDER BY idmedia DESC "
+    }
+    
+    sqlselect = "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL " + subsqlselect + " GROUP BY title, year " + sqlorderby + " LIMIT " + intToStr(G_LISTSIZE)
+    showInfo( "MEDIAINFOSEARCH-SQL: " + sqlselect )
     result = sqlite_map_mediamediainfo( sqlselect )
     
     return result

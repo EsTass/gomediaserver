@@ -301,6 +301,9 @@ func main() {
     serverdata.HandleFunc("/media-play-settime/", mediaPlaySetTime)
     serverdata.HandleFunc("/media-subs-load/", mediaPlaySubLoad)
     
+    serverdata.HandleFunc("/search/", listSearch)
+    serverdata.HandleFunc("/search-list/", listSearchResult)
+    
     //Admins
     //Logs
     serverdata.HandleFunc("/logs-list/", logsList)

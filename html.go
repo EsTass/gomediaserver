@@ -934,6 +934,70 @@ func liveTVPlayTime(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+//SEARCH FORM
+
+type listSearchTemp struct {
+    Menu        template.HTML
+    Title       string
+    Genres      []string
+    Years       []string
+    Yearsi       []string
+    Ratings     []string
+    Orderby     []string
+}
+
+func listSearch(w http.ResponseWriter, r *http.Request) {
+    // Check if user is authenticated
+    if checkBaseActionAuth(w, r, "SEARCH-LIST") == false {
+        //Invalid IP or user
+    } else {
+        showInfo( "SEARCH-LIST: " )
+        tmpl := template.Must(template.ParseFiles("html/search.html"))
+        menu := getMenu(w, r)
+        orderby := []string { "Last Added", "Premiere", "Rating", "Year", "Title" }
+        formData := listSearchTemp{
+            Menu        :   template.HTML( menu ),
+            Title       :   "Search",
+            Genres      :   G_GENRES,
+            Years       :   fscrap_getYears(),
+            Yearsi      :   fscrap_getYearsInv(),
+            Ratings     :   fscrap_getRatings(),
+            Orderby     :   orderby,
+        }
+        tmpl.Execute(w, formData)
+    }
+}
+
+type listSearchResultTemp struct {
+    Title       string
+    Todos       listBaseElement
+}
+
+func listSearchResult(w http.ResponseWriter, r *http.Request) {
+    // Check if user is authenticated
+    if checkBaseActionAuth(w, r, "SEARCH-LIST-RESULT") == false {
+        //Invalid IP or user
+    } else {
+        //params: search, year, year2, rating, genre1, genre2, genre3, orderby
+        search := getParamPost(r, "search")
+        year := getParamPost(r, "year")
+        year2 := getParamPost(r, "year2")
+        rating := getParamPost(r, "rating")
+        genre1 := getParamPost(r, "genre1")
+        genre2 := getParamPost(r, "genre2")
+        genre3 := getParamPost(r, "genre3")
+        orderby := getParamPost(r, "orderby")
+        mediainfo := sqlite_getMediaMediaInfoSearch(search, year, year2, rating, genre1, genre2, genre3, orderby)
+        showInfo( "SEARCH-LIST-RESULT: " )
+        tmpl := template.Must(template.ParseFiles("html/search.result.html"))
+        formData := listSearchResultTemp{
+            Title       :   "Search",
+            Todos       :   mediainfo,
+        }
+        tmpl.Execute(w, formData)
+    }
+}
+
 //ADMINS ACTIONS
 
 //LIST LOGS
@@ -1914,6 +1978,9 @@ func getMenu( w http.ResponseWriter, r *http.Request ) string {
         listdata[ len(listdata) ] = map[string]string{ "title" : element, "url" : "/list/?genre=" + element, "admin" : "" }
     }
     
+    //Search
+    listdata[ len(listdata) ] = map[string]string{ "title" : "Search", "url" : "/search/?", "admin" : "" }
+    
     //Admin Menu
     if checkLoguedUserAdmin( w, r ) {
         listdata[ len(listdata) ] = map[string]string{ "title" : "Logs", "url" : "/logs-list/?", "admin" : "1" }
@@ -1968,6 +2035,7 @@ http://mlblive-akc.mlb.com/ls01/mlbam/mlb_network/NETWORK_LINEAR_1/master_wired.
     liveTvDataAdd(data)
     */
     //x, y := ffprobeSize( "http://212.104.160.156:1935/live/lebrijatv2/playlist2.m3u8?wowzasessionid=1758058924.m3u8" )
+    cronMediaInfoCompleteImgs()
     x := ""
     y := ""
     z := ""

@@ -102,6 +102,26 @@ func fscrap_getYear( title string ) string {
     return result
 }
 
+func fscrap_getYears() []string {
+    var result []string
+    
+    for i := 1900; i <= ( time.Now().Year() + 1 ); i++ {
+        result = append(result, intToStr(i))
+    }
+    
+    return result
+}
+
+func fscrap_getYearsInv() []string {
+    var result []string
+    
+    for i := ( time.Now().Year() + 1 ); i >= 1900; i-- {
+        result = append(result, intToStr(i))
+    }
+    
+    return result
+}
+
 //SEASONS x CHAPTERS
 
 func fscrap_getSeasonChapter( title string ) ( string, string ) {
@@ -169,6 +189,18 @@ func fscrap_getChapters() []string {
     var result []string
     
     for i := 1; i <= G_SCRAPPEPISODEMAX; i++ {
+        result = append(result, intToStr(i))
+    }
+    
+    return result
+}
+
+//RATINGS
+
+func fscrap_getRatings() []string {
+    var result []string
+    
+    for i := 10; i >= 0; i-- {
         result = append(result, intToStr(i))
     }
     
@@ -283,7 +315,7 @@ func copyImgsMediaInfo( idmia string, idmib string ){
     for _, ft := range G_MEDIA_IMAGES {
         fa := pathJoin( G_IMAGES_FOLDER, idmia + "." + ft )
         fb := pathJoin( G_IMAGES_FOLDER, idmib + "." + ft )
-        if fileExist( fa ) {
+        if fileExist( fa ) &&  fileExist( fb ) == false {
             os.Link( fa, fb )
         }
     }

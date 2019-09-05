@@ -48,7 +48,7 @@
                     {{.Tags}}
                 </div>
                 {{end}}
-                <a href='/mediainfo/?id={{.idmediainfo}}' title='{{.title}}'><img title='{{.title}}: {{.plot}}' class='listElementImg lazy' data-src='' src='/mediainfo-img/?id={{.idmediainfo}}' /><span class=''>{{.title}}  {{if .season}} {{.season}}x{{printf "%02s" .episode}} {{end}} ({{.year}})</span></a>
+                <a href='/mediainfo/?id={{.idmediainfo}}' title='{{.title}}'><img title='{{.title}}: {{.plot}}' class='listElementImg lazy' data-src='' src='/mediainfo-img/?id={{.idmediainfo}}' /><span class=''>{{.title}}  {{if .season}} {{.season}}x{{printf "%02s" .episode}} {{end}} ({{.year}}{{if .rating}} &#x2605;{{.rating}}{{end}})</span></a>
             </div>
             {{end}}
 
