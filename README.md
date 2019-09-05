@@ -26,9 +26,9 @@ A bunch of utilities for:
  - Logo thanks to [leonardoderoy](https://github.com/leonardoderoy)
  - Groups by premiere, continue, recomended and last added (frontal page)
  - IPTV List and import
+ - Poster list with search by genres, actors, years or rating (complex search)
  
 ## Working on
- - Poster list with search by genres, actors, years or rating (complex search)
  - Search and download new media from web adding scrappers to configuration (youtube, elinks, magnets, torrents and dd supported, cron or manual with any external program like transmission, jdownloader, amule, qbittorent, etc).
  - Clean duplicates by quality with safe seeding (min days to seed) and max filesize to maintanin
  - Extract files on cron
@@ -47,6 +47,7 @@ A bunch of utilities for:
  - Extract and edit `config.toml`
  - Build or use `gms` or `gms.exe`
  - run `./gms`(linux) or `gms.exe` (windows, sorry not tested)
+ - Database compatible with [phpmediaserver](https://github.com/EsTass/phpmediaserver) can be replaced
 
 ## Build
 
