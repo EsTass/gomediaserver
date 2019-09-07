@@ -4,7 +4,7 @@
 #windows path needed full path
 
 appname = "GMS"
-appversion = "0.5"
+appversion = "0.6"
 #Show msgs info on cmd, error msg are printed allways
 debug = true
 #Video file forced on debug mode if requested video file not exist (fullpath)
@@ -105,7 +105,7 @@ removesizepriority = 4096
 downloadslowspace = 200
 #On low free space mode to clean: 
 #old : old files downloaded first
-#bigsize : big files first
+#bigsize : big files first (>removesizepriority by old)
 #releaseold : media old date of release first
 downloadscleanmode = "old"
 #remove old (removesafedays) low disk space folders on download folder with less than MB
@@ -161,7 +161,7 @@ cronscrapper = "filebot"
 titleclean = [
     "\\(.*\\)",
     "\\[.*\\]",
-    "([wW]{3}|)\\.{0,1}[A-Za-z0-9]+?\\.(com|net|org|es|co|nz|eu|ru|to|watch|tv)[^A-Za-z0-9]",
+    "([wW]{3}|)\\.{0,1}[A-Za-z0-9]+?\\.(com|net|org|es|co|nz|eu|ru|to|watch|tv)",
     #Languaje
     "English",
     "Spanish",
@@ -291,3 +291,39 @@ thetvdblang = "es"
 
 pymicmd = "pymediaident.py"
 pymilang = "es"
+
+[p2p]
+
+#where to download torrent files
+torrentsfolder = "./cache/p2p"
+#cmd magnets (%MAGNET%) or file to append as text (file need to exist)
+magnetscmd = './cache/p2p/magnets.txt'
+#cmd elinks (%ELINK%) or file to append as text (file need to exist)
+elinkscmd = './cache/p2p/elinks.txt'
+#jdownloader folder to create crawljob
+jdownloaderfolder = "./cache/p2p"
+#domains to create crawljob for jdownloader
+jdownloaderdomains = [
+    "https://mega.nz/",
+    "https://streamcloud.eu",
+    "https://www.rapidvideo.com/",
+    "https://ok.ru/",
+    "https://streamplay.to",
+    "https://openload.co/",
+    "https://1fichier.com/",
+    "https://uptobox.com",
+    "https://uploaded.net/",
+    "https://dfiles.eu/",
+    "https://filefactory.com/",
+    "https://rapidgator.net/",
+    "https://streamango.com/",
+    "https://hqq.watch/",
+    "https://vidoza.net/",
+    "https://streamplay.me/",
+    "https://streamplay.to/",
+    "https://powvideo.net/",
+    "https://up.to/",
+    "https://flashx.tv/",
+    "https://waaw.tv/",
+    "https://gamovideo.com/"
+]

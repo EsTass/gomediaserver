@@ -13,6 +13,7 @@ import (
     "unicode/utf8"
     "net/http"
 	"io"
+    "io/ioutil"
 	"strconv"
     "encoding/json"
     
@@ -308,6 +309,22 @@ func urlToFile( url string, filename string ) bool {
     return result
 }
 
+//URL TO DATA
+
+func urlGet( url string ) string {
+	resp, err := http.Get(url)
+	if err != nil {
+		showInfoError(err)
+	}
+	defer resp.Body.Close()
+	// reads html as a slice of bytes
+	html, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		showInfoError(err)
+	}
+	return fmt.Sprintf("%s", html)
+}
+
 //MEDIAINFO FILE COPY
 
 func copyImgsMediaInfo( idmia string, idmib string ){
@@ -348,11 +365,64 @@ func fscrap_getFileTags( file string ) []string {
     return result
 }
 
+//COMPARE FILES BY QUALITY
+
+func fscrap_getWorstVideo( file1 string, file2 string ) string {
+    //compare by G_DOWN_SIZEPRIO, format (mkv prefered, more tracks), widthxheight or size
+    result := ""
+    fs1 := fileSizeMB(file1)
+    fs2 := fileSizeMB(file2)
+    if G_DOWN_SIZEPRIO > 0 {
+        if fs1 > float64(G_DOWN_SIZEPRIO) {
+            result = file1
+        } else if fs2 > float64(G_DOWN_SIZEPRIO) {
+            result = file2
+        }
+    }
+    
+    if result == "" {
+        fs1 := fileMime( file1 )
+        fs2 := fileMime( file2 )
+        codecs := []string { "mkv", "matroska" }
+        if sliceInString( fs1, codecs ) && sliceInString( fs2, codecs ) == false {
+            result = file2
+        } else if sliceInString( fs2, codecs ) && sliceInString( fs1, codecs ) == false {
+            result = file1
+        }
+    }
+    
+    if result == "" {
+        x, y := ffprobeSize( file1 )
+        fs1 := strToInt(x) * strToInt(y)
+        x, y = ffprobeSize( file2 )
+        fs2 := strToInt(x) * strToInt(y)
+        if fs1 > fs2 {
+            result = file2
+        } else if fs2 > fs1 {
+            result = file1
+        }
+    }
+    
+    if result == "" {
+        fs1 := fileSize(file1)
+        fs2 := fileSize(file2)
+        if fs1 > fs2 {
+            result = file1
+        } else if fs2 > fs1 {
+            result = file2
+        } else {
+            result = file2
+        }
+    }
+    
+    return result
+}
+
 //GENERIC CALLER
 
 func identMedia( idmedia string, scrapper string, ftitle string, fseason string, fepisode string, fimdb string ) string {
     result := ""
-    nowpath, _ := filepath.Abs(G_DOWNLOADS_FOLDER)
+    nowpath := pathAbs(G_DOWNLOADS_FOLDER)
     mediadata := sqlite_getMediaID( idmedia )
     showInfo( "FSCRAPP-IDENTMEDIA-DATA: " + idmedia )
     if len(mediadata) > 0 {

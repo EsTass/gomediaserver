@@ -493,6 +493,17 @@ func sqlite_getLogsLogins( ip string ) map[int]map[string]string {
     return result
 }
 
+func sqlite_getLogsLiveTV() map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqle := ""
+    sqle += " WHERE action LIKE 'livetv-check-all' "
+    sqle += " AND logs.date > DATETIME(CURRENT_TIMESTAMP, '-7 days') "
+    sqlselect := "SELECT * FROM logs " + sqle + " ORDER BY date DESC LIMIT 1000"
+    result = sqlite_map_logs( sqlselect )
+    
+    return result
+}
+
 //MEDIA ELEMENTS
 
 //idmedia, file, langs, subs, idmediainfo
@@ -534,6 +545,14 @@ func sqlite_map_media( sqlselect string ) map[int]map[string]string {
 func sqlite_getMediaAll() map[int]map[string]string {
     result := map[int]map[string]string {}
     sqlselect := "SELECT * FROM media ORDER BY idmedia DESC"
+    result = sqlite_map_media( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaAllRev() map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM media ORDER BY idmedia ASC"
     result = sqlite_map_media( sqlselect )
     
     return result
@@ -601,6 +620,15 @@ func sqlite_checkMediaFile( file string ) bool {
     if len(data) > 0 && data[ 0 ][ "file" ] == file {
         result = true
     }
+    
+    return result
+}
+
+func sqlite_getMediaDuplys() map[int]map[string]string {
+    result := map[int]map[string]string {}
+    
+    sqlselect := "SELECT * FROM media WHERE idmediainfo > 0 GROUP BY idmediainfo HAVING count( idmedia ) > 1 ORDER BY idmediainfo ASC LIMIT 1000 "
+    result = sqlite_map_media( sqlselect )
     
     return result
 }
@@ -1069,6 +1097,15 @@ func sqlite_getMediaMediaInfo( size int, page int ) map[int]map[string]string {
     result := map[int]map[string]string {}
     sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL ORDER BY idmedia DESC LIMIT " + intToStr( size ) + "  OFFSET " + intToStr( ( size * page ) )
     showInfo( "MEDIAINFOLIST-SQL: " + sqlselect )
+    result = sqlite_map_mediamediainfo( sqlselect )
+    
+    return result
+}
+
+func sqlite_getMediaMediaInfoYear() map[int]map[string]string {
+    result := map[int]map[string]string {}
+    sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL ORDER BY year ASC "
+    showInfo( "MEDIAINFOLIST-YEAR-SQL: " + sqlselect )
     result = sqlite_map_mediamediainfo( sqlselect )
     
     return result

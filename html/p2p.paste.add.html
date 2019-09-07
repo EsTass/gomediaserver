@@ -1,0 +1,20 @@
+
+        <h1>{{.Title}}</h1>
+        
+        <div id="dAdd" class="tList widthFull">
+            <table class="widthFull" style="background-color: gainsboro; text-align: center;font-size: 120%;">
+                <tr>
+                    <th>TYPE</th>
+                    <th>TITLE</th>
+                    <th>LINK</th>
+                </tr>
+                {{range .Todos}}
+                <tr>
+                    <td style='max-width: 30vw;word-wrap: break-word;'>{{.Type}}</td>
+                    <td style='max-width: 30vw;word-wrap: break-word;'>{{.Title}}</td>
+                    <td style='max-width: 40vw;word-wrap: break-word;'>{{.Link}}</td>
+                </tr>
+                {{end}}
+            </table>
+        </div>
+        

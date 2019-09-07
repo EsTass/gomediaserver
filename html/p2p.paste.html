@@ -1,0 +1,67 @@
+<!DOCTYPE html PUBLIC '-//W3C//DTD XHTML 1.0 Strict//EN' 'http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd'>
+<html lang='En' xml:lang='En' xmlns='http://www.w3.org/1999/xhtml'>
+<head>
+	
+	<title>GMS</title>
+
+	<base href="">
+	
+	<meta charset="utf-8">
+	<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
+	<meta http-equiv='X-UA-Compatible' content='IE=8' />
+	<meta http-equiv='Pragma' content='no-cache' />
+	<meta http-equiv='Expires' content='-1' />
+    <meta name="referrer" content="no-referrer" />
+	
+	<meta name='Keywords' content='' />
+	<meta name='Description' content='' />
+	<meta name='robots' content='nofollow' />
+	<meta name='author' content='GMS' />
+	
+	<script src="/assets/jquery-3.2.1.min.js"></script>
+    <script src="/assets/init.js"></script>
+    
+	<link type='image/x-icon' href='/assets/favicon.ico' rel='shortcut icon' />
+	
+	<link rel="stylesheet" href="/assets/index.css" />
+    <link rel="stylesheet" href="/assets/index_extra.css" />
+</head>
+
+<body>
+    
+    {{.Menu}}
+    
+    <div class='dBaseBox'>
+        
+        <h1>{{.Title}}</h1>
+        
+        <div id="dAdd" class="tList widthFull">
+            <form class='' id='p2ppaste' action='/p2p-paste-a/' method='post' autocomplete='off'>
+                <table class="widthFull" style="background-color: gainsboro; text-align: center;font-size: 120%;">
+                    <tr>
+                        <th colspan='100'>
+                            URL List
+                        </th>
+                    </tr>
+                    <tr>
+                        <td style='width: 80vw;'>
+                            <textarea style="width: 100%;height: 20vh;" id="data" name="data" placeholder="URL list"></textarea>
+                        </td>
+                        <td style='vertical-align: top;'>
+                            <input type='button' onclick="g_post_form( '/p2p-paste-a/', 'p2ppaste', 'dResult' );" id='bp2ppaste' value='Add' />
+                        </td>
+                    </tr>
+                </table>
+            </form>
+        </div>
+        
+        <br />
+        
+        <div id="dResult" class="tList widthFull" style="text-align: center;padding: 10px 0px;"></div>
+        
+        <br />
+        
+    </div>
+
+</body>
+</html>

@@ -5,9 +5,10 @@ import (
     "path/filepath"
     "os"
     //"fmt"
-    "log"
+    //"log"
     "strings"
     "time"
+    "sort"
     
     //go get "github.com/robfig/cron"
     "github.com/robfig/cron"
@@ -43,7 +44,7 @@ func cronShortRun(){
     cronAddNewFiles()
     
     //Clean Not Existant Files
-    //cronCleanFiles()
+    cronCleanFiles()
     
     //Clean Temp Folders
     cronCleanTempFolders()
@@ -76,6 +77,7 @@ func cronLongRun(){
     cronCleanSessions()
     
     //Clean downloaded media duply
+    cronCleanMediaDuplys()
     
     //Clean downloaded media not identified
     cronCleanMediaNotIdent()
@@ -83,9 +85,11 @@ func cronLongRun(){
     //Clean Mediainfo duplys
     cronCleanMediaInfoDuplys()
     
-    //Compressed Files
+    //Compressed Files process
+    cronUncompressFiles()
     
     //Free space on low
+    cronCleanDisk()
     
     //Clean low size old directories/files
     cronCleanDirsLowSize()
@@ -99,7 +103,8 @@ func cronLongRun(){
     
     //Sites Scrap
     
-    //LiveTV Clean && Update (TODO, more time)
+    //LiveTV Clean && Update (1week)
+    cronLiveTV()
     
     fileAppendLine( G_CRONLONGTIME_FILE, "Cron LONG ENDED: " + dateGetNow() )
     showInfo( "CRON-LONG-ENDED: " + dateGetNow() )
@@ -112,7 +117,7 @@ func cronLongRun(){
 func cronAddNewFiles(){
     //G_DOWNLOADS_FOLDER
     fileAppendLine( G_CRONSHORTTIME_FILE, "::Adding New Files: " + dateGetNow() )
-    nowpath, _ := filepath.Abs(G_DOWNLOADS_FOLDER)
+    nowpath := pathAbs(G_DOWNLOADS_FOLDER)
     fileAppendLine( G_CRONSHORTTIME_FILE, "::Folder: " + nowpath )
     fileAppendLine( G_CRONSHORTTIME_FILE, "" )
     err := filepath.Walk(nowpath,
@@ -132,7 +137,7 @@ func cronAddNewFiles(){
     })
     fileAppendLine( G_CRONSHORTTIME_FILE, ":: END Adding New Files: " + dateGetNow() )
     if err != nil {
-        log.Println(err)
+        showInfoError(err)
     }
 }
 
@@ -159,7 +164,7 @@ func cronCleanFiles(){
 
 func cronIdentNewFiles(){
     //G_DOWNLOADS_FOLDER
-    nowpath, _ := filepath.Abs(G_DOWNLOADS_FOLDER)
+    nowpath := pathAbs(G_DOWNLOADS_FOLDER)
     fileAppendLine( G_CRONSHORTTIME_FILE, "::Identify New Files: " + dateGetNow() )
     fileAppendLine( G_CRONSHORTTIME_FILE, "" )
     filemedia := sqlite_getMediaIdentNow( 50 )
@@ -189,7 +194,7 @@ func cronIdentNewFiles(){
 //Clean TMP folder
 
 func cronCleanTempFolders(){
-    bf, _ := filepath.Abs(G_TMP_FOLDER)
+    bf := pathAbs(G_TMP_FOLDER)
     folders := getFolders( bf )
     fileAppendLine( G_CRONSHORTTIME_FILE, "::Removing TMP Folders: " + dateGetNow() )
     for _, f := range folders {
@@ -336,4 +341,258 @@ func cronMediaInfoCompleteImgs() {
         }
     }
     fileAppendLine( G_CRONLONGTIME_FILE, ":: END Complete Series Images: " + dateGetNow() )
+}
+
+//Clean media files duplicated idmediainfo by quality
+
+func cronCleanMediaDuplys() {
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Clean Media Files Duplys: " + dateGetNow() )
+    fileAppendLine( G_CRONLONGTIME_FILE, "" )
+    media := sqlite_getMediaDuplys()
+    for _, mi := range media {
+        fileAppendLine( G_CRONLONGTIME_FILE, "-- FINDED: " + mi["idmedia"] + "/" + mi["idmediainfo"] )
+        media2 := sqlite_getMediaWhithMediaInfoID( mi["idmediainfo"] )
+        if len(media2) > 1 {
+            idbestfile := ""
+            bestfile := ""
+            for _, mi2 := range media2 {
+                if bestfile == "" {
+                    //first
+                    bestfile = mi2["file"]
+                    idbestfile = mi2["idmedia"]
+                } else {
+                    fileAppendLine( G_CRONLONGTIME_FILE, "-- COMPARE: " + mi2["file"] + " => " + bestfile )
+                    wfile := fscrap_getWorstVideo( bestfile, mi2["file"] )
+                    fileAppendLine( G_CRONLONGTIME_FILE, "-- WORSTFILE: " + wfile )
+                    if wfile == bestfile {
+                        tcomp := time.Now().Add(time.Hour * time.Duration((24 * G_DOWN_SAFEDAYS * -1)))
+                        if fileExist(bestfile) && fileModifTime(bestfile).Before(tcomp) {
+                            sqlite_media_delete( idbestfile )
+                            fileRemove( bestfile )
+                        }
+                        bestfile = mi2["file"]
+                        idbestfile = mi2["idmedia"]
+                    } else if wfile == mi2["file"] {
+                        tcomp := time.Now().Add(time.Hour * time.Duration((24 * G_DOWN_SAFEDAYS * -1)))
+                        if fileExist(mi2["file"]) && fileModifTime(mi2["file"]).Before(tcomp) {
+                            sqlite_media_delete( mi2["idmedia"] )
+                            fileRemove( mi2["file"] )
+                        }
+                    }
+                }
+            }
+            fileAppendLine( G_CRONLONGTIME_FILE, "-- BEST FILE: " + idbestfile + " => " + bestfile )
+        }
+    }
+    fileAppendLine( G_CRONLONGTIME_FILE, ":: END Clean Media Files Duplys: " + dateGetNow() )
+}
+
+//Cron Uncompress Files to file_ folder
+
+func cronUncompressFiles() {
+    //G_DOWNLOADS_FOLDER
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Uncompress New Files: " + dateGetNow() )
+    nowpath := pathAbs(G_DOWNLOADS_FOLDER)
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Folder: " + nowpath )
+    fileAppendLine( G_CRONLONGTIME_FILE, "" )
+    err := filepath.Walk(nowpath,
+        func(path string, info os.FileInfo, err error) error {
+            if err != nil {
+                return err
+            }
+            if err == nil && fileExist( path ) && checkIsFile( path ) && sliceInString( path, G_DOWNLOADS_FOLDER_EXC ) == false && checkMimeCompress( path ) && fileExist( path + "_" ) == false {
+                showInfo( "CRON-LONG-UNCOMPRESS: " + path )
+                if strEndWith( path, ".zip" ) && Unzip( path, path + "_" ) {
+                    showInfo( "CRON-LONG-UNCOMPRESSED-ZIP: " + path )
+                } else if strEndWith( path, ".rar" ) && Unrar( path, path + "_" ) {
+                    showInfo( "CRON-LONG-UNCOMPRESSED-RAR: " + path )
+                } else if Un7z( path, path + "_" ) {
+                    showInfo( "CRON-LONG-UNCOMPRESSED-7Z: " + path )
+                } else {
+                    showInfo( "CRON-LONG-UNCOMPRESS-ERROR: " + path )
+                }
+            }
+            return nil
+    })
+    fileAppendLine( G_CRONLONGTIME_FILE, ":: END Uncompress New Files: " + dateGetNow() )
+    if err != nil {
+        showInfoError(err)
+    }
+}
+
+//Cron clean disk if G_DOWNLOADS_FOLDER low size < G_DOWN_LOWSPACE with G_DOWN_CLEANMODE
+
+func cronCleanDisk() {
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Clean LowDiskSpace: " + dateGetNow() )
+    nowpath := pathAbs(G_DOWNLOADS_FOLDER)
+    fileAppendLine( G_CRONLONGTIME_FILE, "::Folder: " + nowpath )
+    fileAppendLine( G_CRONLONGTIME_FILE, "" )
+    disksize := getFreeSpace( nowpath )
+    fileAppendLine( G_CRONLONGTIME_FILE, ":: FREE DISK: " + sizeToHuman(disksize) )
+    if disksize < int64( G_DOWN_LOWSPACE * 1024 * 1024 * 1024 ) {
+        fileAppendLine( G_CRONLONGTIME_FILE, ":: LOWDISKSPACE: " + sizeToHuman(disksize) + " Mode: " + G_DOWN_CLEANMODE )
+        switch G_DOWN_CLEANMODE {
+            case "releaseold":
+                cronCleanDiskReleaseOld()
+            case "bigsize":
+                cronCleanDiskBigSize()
+            case "old":
+                fallthrough
+            default:
+                //old
+                cronCleanDiskOld()
+        }
+    }
+    fileAppendLine( G_CRONLONGTIME_FILE, ":: END Clean LowDiskSpace: " + dateGetNow() )
+}
+
+func cronCleanDiskOld() {
+    media := sqlite_getMediaAllRev()
+    quantity := 100
+    nowpath := pathAbs(G_DOWNLOADS_FOLDER)
+    var keys []int
+    for k := range media {
+        keys = append(keys, k)
+    }
+    sort.Ints(keys)
+    for _, k := range keys {
+        m := media[k]
+        if fileExist(m["file"]) {
+            fsize := fileSize(m["file"])
+            fileAppendLine( G_CRONLONGTIME_FILE, ":: Remove: " + m["idmedia"] + " => " + sizeToHuman(fsize) + " => " + filepath.Base(m["file"]) )
+            fileRemove(m["file"])
+            sqlite_media_delete(m["idmedia"])
+        } else {
+            //fileAppendLine( G_CRONLONGTIME_FILE, ":: NOT EXIST: " + m["idmedia"] )
+            //autoremove
+            sqlite_media_delete(m["idmedia"])
+        }
+        disksize := getFreeSpace( nowpath )
+        quantity--
+        if quantity <= 0 || disksize > int64( G_DOWN_LOWSPACE * 1024 * 1024 * 1024 ) {
+            break
+        }
+    }
+}
+
+func cronCleanDiskReleaseOld() {
+    media := sqlite_getMediaMediaInfoYear()
+    quantity := 100
+    nowpath := pathAbs(G_DOWNLOADS_FOLDER)
+    var keys []int
+    for k := range media {
+        keys = append(keys, k)
+    }
+    sort.Ints(keys)
+    for _, k := range keys {
+        m := media[k]
+        if fileExist(m["file"]) {
+            fsize := fileSize(m["file"])
+            fileAppendLine( G_CRONLONGTIME_FILE, ":: Remove: " + m["idmedia"] + " => " + sizeToHuman(fsize) + " => " + filepath.Base(m["file"]) )
+            fileRemove(m["file"])
+            sqlite_media_delete(m["idmedia"])
+        } else {
+            //fileAppendLine( G_CRONLONGTIME_FILE, ":: NOT EXIST: " + m["idmedia"] )
+            //autoremove
+            sqlite_media_delete(m["idmedia"])
+        }
+        disksize := getFreeSpace( nowpath )
+        quantity--
+        if quantity <= 0 || disksize > int64( G_DOWN_LOWSPACE * 1024 * 1024 * 1024 ) {
+            break
+        }
+    }
+}
+
+func cronCleanDiskBigSize() {
+    media := sqlite_getMediaAllRev()
+    quantity := 1000000
+    maxsize := G_DOWN_SIZEPRIO * 2
+    nowpath := pathAbs(G_DOWNLOADS_FOLDER)
+    var keys []int
+    for k := range media {
+        keys = append(keys, k)
+    }
+    sort.Ints(keys)
+    for nowsize := maxsize; nowsize > 1024; nowsize = nowsize - 128 {
+        for _, k := range keys {
+            m := media[k]
+            //fileAppendLine( G_CRONLONGTIME_FILE, ":: Check Size: " + sizeToHuman( int64( nowsize * 1024 * 1024 ) ) )
+            if fileExist(m["file"]) {
+                fsize := fileSize(m["file"])
+                if fsize > int64( nowsize * 1024 * 1024 ) {
+                    fileAppendLine( G_CRONLONGTIME_FILE, ":: Remove: " + m["idmedia"] + " => " + sizeToHuman(fsize) + " => " + filepath.Base(m["file"]) + " => " + sizeToHuman( int64( nowsize * 1024 * 1024 ) ) )
+                    fileRemove(m["file"])
+                    sqlite_media_delete(m["idmedia"])
+                }
+            } else {
+                //fileAppendLine( G_CRONLONGTIME_FILE, ":: NOT EXIST: " + m["idmedia"] )
+                //autoremove
+                sqlite_media_delete(m["idmedia"])
+            }
+            disksize := getFreeSpace( nowpath )
+            quantity--
+            if quantity <= 0 || disksize > int64( G_DOWN_LOWSPACE * 1024 * 1024 * 1024 ) {
+                nowsize = 0
+                break
+            }
+        }
+    }
+}
+
+//CRON LIVETV CLEAN AND UPDATE
+
+func cronLiveTV() {
+    last := sqlite_getLogsLiveTV()
+    if len(last) == 0 {
+        sqlite_log_insert( "livetv-check-all", "cron", "", "", "cron", "127.0.0.1" )
+        fileAppendLine( G_CRONLONGTIME_FILE, "::Clean LiveTV: " + dateGetNow() )
+        fileAppendLine( G_CRONLONGTIME_FILE, "" )
+        
+        medialive := sqlite_getMediaLiveAll()
+        total := len(medialive)
+        valid := 0
+        nerror := 0
+        for _, ml := range medialive {
+            //action := ""
+            codec := ffprobeVideoCodec( ml["url"] )
+            if codec != "NOCODEC" {
+                valid++
+            } else {
+                nerror++
+                sqlite_medialive_delete( ml["idmedialive"] )
+            }
+        }
+        fileAppendLine( G_CRONLONGTIME_FILE, "Result (valid/error/total): " + intToStr( valid ) + "/" + intToStr( nerror ) + "/" + intToStr( total ) )
+        fileAppendLine( G_CRONLONGTIME_FILE, "::END Clean LiveTV: " + dateGetNow() )
+        
+        fileAppendLine( G_CRONLONGTIME_FILE, "::Add LiveTVURLS: " + dateGetNow() )
+        medialive = sqlite_getMediaLiveURLAll()
+        total = len(medialive)
+        valid = 0
+        nerror = 0
+        etadded := 0
+        etexist := 0
+        etnerror := 0
+        ettotal := 0
+        for _, ml := range medialive {
+            data := urlGet( ml["url"] )
+            if len(data) > 100 {
+                valid++
+                //Extract data
+                eadded, eexist, eerrors, etotal := liveTvDataAdd( data )
+                etadded += eadded
+                etexist += eexist
+                etnerror += eerrors
+                ettotal += etotal
+                //TODO on total == 0 delete url
+            } else {
+                nerror++
+                sqlite_medialiveurl_delete( ml["idmedialive"] )
+            }
+        }
+        fileAppendLine( G_CRONLONGTIME_FILE, "URLS Result (valid/error/total): " + intToStr( valid ) + "/" + intToStr( nerror ) + "/" + intToStr( total ) )
+        fileAppendLine( G_CRONLONGTIME_FILE, "MediaURLs Added (added/exist/errors/total): " + intToStr(etadded) + "/" + intToStr(etexist) + "/" + intToStr(etnerror) + "/" + intToStr(ettotal) )
+        fileAppendLine( G_CRONLONGTIME_FILE, "::END Add LiveTVURLS: " + dateGetNow() )
+    }
 }

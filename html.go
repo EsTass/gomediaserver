@@ -1865,7 +1865,7 @@ func liveTVAdminAdd(w http.ResponseWriter, r *http.Request) {
         //Invalid IP or user or admin
     } else {
         sqlite_log_insert( "livetv-add", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
-        //params post: username, pass1, pass2, useradmin
+        //params post: data
         data := getParamPost( r, "data" )
         showInfo( "LIVETV-ADMIN-LIST-ADD: " + intToStr(len(data)) )
         //Extract data
@@ -1921,7 +1921,7 @@ func liveTVAdminCheckAll(w http.ResponseWriter, r *http.Request) {
     if checkBaseActionAuthAdmin(w, r, "LIVETV-CHECKALL") == false {
         //Invalid IP or user or admin
     } else {
-        sqlite_log_insert( "livetv-check", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        sqlite_log_insert( "livetv-check-all", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
         //params post: clean = 1
         clean := getParam( r, "clean" )
         medialive := sqlite_getMediaLiveAll()
@@ -1950,6 +1950,212 @@ func liveTVAdminCheckAll(w http.ResponseWriter, r *http.Request) {
         }
         showInfo( "LIVETV-ADMIN-LIST-CHECKALL: showing data"  )
         fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
+//LIVETVURLS
+
+func liveTVURLAdminList(w http.ResponseWriter, r *http.Request) {
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+
+    if checkBaseActionAuthAdmin(w, r, "LIVETVURL-LIST") == false {
+        //Invalid IP or user or admin
+    } else {
+        tmpl := template.Must(template.ParseFiles("html/livetvurls.list.html"))
+        sqlite_log_insert( "livetvurls-list", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //search := getParam(r, "search")
+        listdata := sqlite_getMediaLiveURLAll()
+        menu := getMenu(w, r)
+        formData := listMedia{
+            Menu    :   template.HTML( menu ),
+            Title   :   "LiveTV URLs List",
+            //Todos   :   mapMediaToSlice( listdata ),
+            Todos   :   listdata,
+        }
+        //fmt.Println( listdata )
+        //fmt.Println( mapsMediaKeyOrder( listdata ) )
+        showInfo( "LIVETVURL-LIST: showing data"  )
+        tmpl.Execute(w, formData)
+    }
+}
+
+func liveTVURLAdminRemove(w http.ResponseWriter, r *http.Request) {
+    var msginfo string
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionAuthAdmin(w, r, "LIVETVURLS-DELETE") == false {
+        //Invalid IP or user or admin
+    } else {
+        sqlite_log_insert( "livetvurls-delete", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //params post: id = idmedialiveurls
+        id := getParam( r, "id" )
+
+        if len( id ) == 0 {
+            msginfo = "Invalid LIVETVURLS: " + id
+        }else  {
+            sqlite_medialiveurl_delete( id )
+            msginfo = "LIVETVURLS Deleted: " + id
+        }
+        showInfo( "LIVETVURLS-ADMIN-LIST-DELETE: showing data"  )
+        fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
+func liveTVURLAdminAdd(w http.ResponseWriter, r *http.Request) {
+    var msginfo string
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionAuthAdmin(w, r, "LIVETVURLS-ADD") == false {
+        //Invalid IP or user or admin
+    } else {
+        sqlite_log_insert( "livetvurls-add", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //params post: title, url
+        title := getParamPost( r, "title" )
+        url := getParamPost( r, "url" )
+        showInfo( "LIVETVURLS-ADMIN-LIST-ADD: " + title )
+        sqlite_medialiveurl_insert( title, url )
+        msginfo = "Added LIVETVURLS: " + title + " => " + url
+        showInfo( "LIVETVURLS-ADMIN-LIST-ADD: showing data"  )
+        fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
+func liveTVURLAdminCheck(w http.ResponseWriter, r *http.Request) {
+    var msginfo string
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionAuthAdmin(w, r, "LIVETVURLS-CHECK") == false {
+        //Invalid IP or user or admin
+    } else {
+        sqlite_log_insert( "livetvurls-check", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //params post: id = idmedialive, clean = 1
+        id := getParam( r, "id" )
+        clean := getParam( r, "clean" )
+
+        if len( id ) == 0 {
+            msginfo = "Invalid IDMEDIALIVEURLS: " + id
+        } else {
+            medialive := sqlite_getMediaLiveURLID(id)
+            if len(medialive) > 0 {
+                data := urlGet( medialive[0]["url"] )
+                if len(data) > 100 {
+                    msginfo = "VALID IDMEDIALIVEURLS: " + id + " => " + intToStr(len(data))
+                    //Extract data
+                    added, exist, errors, total := liveTvDataAdd( data )
+                    msginfo += "<br /> URLs Added (added/exist/errors/total): " + intToStr(added) + "/" + intToStr(exist) + "/" + intToStr(errors) + "/" + intToStr(total)
+                } else {
+                    msginfo = "Invalid IDMEDIALIVEURLS url: " + id
+                    if len(clean) > 0 {
+                        msginfo = "<br />DELETE IDMEDIALIVEURLS: " + id
+                        sqlite_medialiveurl_delete( id )
+                    }
+                }
+            } else {
+                msginfo = "Not Exist IDMEDIALIVEURLS: " + id
+            }
+        }
+        showInfo( "LIVETVURLS-ADMIN-LIST-CHECK: showing data"  )
+        fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
+func liveTVURLAdminCheckAll(w http.ResponseWriter, r *http.Request) {
+    var msginfo string
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionAuthAdmin(w, r, "LIVETVURLS-CHECKALL") == false {
+        //Invalid IP or user or admin
+    } else {
+        sqlite_log_insert( "livetvurls-check-all", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //params post: clean = 1
+        clean := getParam( r, "clean" )
+        medialive := sqlite_getMediaLiveURLAll()
+        total := len(medialive)
+        valid := 0
+        nerror := 0
+        etadded := 0
+        etexist := 0
+        etnerror := 0
+        ettotal := 0
+        for _, ml := range medialive {
+            data := urlGet( ml["url"] )
+            if len(data) > 100 {
+                valid++
+                //Extract data
+                eadded, eexist, eerrors, etotal := liveTvDataAdd( data )
+                etadded += eadded
+                etexist += eexist
+                etnerror += eerrors
+                ettotal += etotal
+                //TODO on total == 0 delete url
+            } else {
+                nerror++
+                if len(clean) > 0 {
+                    sqlite_medialiveurl_delete( ml["idmedialive"] )
+                }
+            }
+        }
+        msginfo = "URLS Result (valid/error/total): " + intToStr( valid ) + "/" + intToStr( nerror ) + "/" + intToStr( total )
+        msginfo += "<br /> MediaURLs Added (added/exist/errors/total): " + intToStr(etadded) + "/" + intToStr(etexist) + "/" + intToStr(etnerror) + "/" + intToStr(ettotal)
+        if len(clean) > 0 {
+            msginfo = "<br />REMOVED: " + intToStr(nerror)
+        }
+        showInfo( "LIVETVURLS-ADMIN-LIST-CHECKALL: showing data"  )
+        fmt.Fprintf(w, "%s", msginfo)
+    }
+}
+
+//P2P
+
+func p2pPaste(w http.ResponseWriter, r *http.Request) {
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+
+    if checkBaseActionAuthAdmin(w, r, "P2P-PASTE-LIST") == false {
+        //Invalid IP or user or admin
+    } else {
+        tmpl := template.Must(template.ParseFiles("html/p2p.paste.html"))
+        sqlite_log_insert( "p2p-paste-list", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        menu := getMenu(w, r)
+        formData := listMedia{
+            Menu    :   template.HTML( menu ),
+            Title   :   "P2P Paste",
+        }
+        showInfo( "P2P-PASTE-LIST: showing data"  )
+        tmpl.Execute(w, formData)
+    }
+}
+
+type listURLTemp struct {
+    Title       string
+    Todos       listBaseElement
+}
+
+func p2pPasteAdd(w http.ResponseWriter, r *http.Request) {
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+
+    if checkBaseActionAuthAdmin(w, r, "P2P-PASTE-ACTION-LIST") == false {
+        //Invalid IP or user or admin
+    } else {
+        //Params data = urllist
+        data := getParamPost(r, "data")
+        //Extract data (title, link)
+        datalist := p2pExtractData( data )
+        
+        tmpl := template.Must(template.ParseFiles("html/p2p.paste.add.html"))
+        sqlite_log_insert( "p2p-paste-a", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        formData := listURLTemp{
+            Title   :   "P2P Paste",
+            Todos   :   datalist,
+        }
+        showInfo( "P2P-PASTE-ACTION-LIST: showing data"  )
+        tmpl.Execute(w, formData)
     }
 }
 
@@ -1988,6 +2194,8 @@ func getMenu( w http.ResponseWriter, r *http.Request ) string {
         listdata[ len(listdata) ] = map[string]string{ "title" : "Identify", "url" : "/media-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "MediaInfo", "url" : "/mediainfo-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "LiveTV", "url" : "/livetv-list/?", "admin" : "1" }
+        listdata[ len(listdata) ] = map[string]string{ "title" : "LiveTVURL", "url" : "/livetvurls-list/?", "admin" : "1" }
+        listdata[ len(listdata) ] = map[string]string{ "title" : "P2PPaste", "url" : "/p2p-paste/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "Played", "url" : "/played-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "Users", "url" : "/users-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "IPs", "url" : "/ip-list/?", "admin" : "1" }
@@ -2035,7 +2243,11 @@ http://mlblive-akc.mlb.com/ls01/mlbam/mlb_network/NETWORK_LINEAR_1/master_wired.
     liveTvDataAdd(data)
     */
     //x, y := ffprobeSize( "http://212.104.160.156:1935/live/lebrijatv2/playlist2.m3u8?wowzasessionid=1758058924.m3u8" )
-    cronMediaInfoCompleteImgs()
+    //cronUncompressFiles()
+    //x := fileMime( "/home/gura/htdocs/gomediaserver/src/app/cache/downloads/2/captura de examen_1.png.7z" )
+    //x := int64ToStr(getFreeSpace("/"))
+    fileRemove( G_CRONLONGTIME_FILE )
+    cronLiveTV()
     x := ""
     y := ""
     z := ""

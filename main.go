@@ -31,6 +31,9 @@ import (
     
     //go get "github.com/pioz/tvdb"
     //"github.com/pioz/tvdb"
+    
+    //go get "github.com/ricochet2200/go-disk-usage/du"
+    //"github.com/ricochet2200/go-disk-usage/du"
 )
 
 //CONFIG
@@ -128,6 +131,13 @@ var (
     //PYMEDIAIDENT
     G_PYMI_CMD          = ""
     G_PYMI_LANG         = ""
+    
+    //P2P
+    G_P2P_TORRENTSFOLDER    = ""
+    G_P2P_MAGNETSCMD        = ""
+    G_P2P_ELINKSCMD         = ""
+    G_P2P_JDFOLDER          = ""
+    G_P2P_JDDOMAINS         = []string {}
     
     //PLAYER
     G_PLAYER_CODECS     = map[string]string {
@@ -244,6 +254,19 @@ func init() {
     G_PYMI_CMD              = config_getPymiCmd()
     G_PYMI_LANG             = config_getPymiLang()
     
+    //P2P
+    G_P2P_TORRENTSFOLDER    = config_getP2PTorrentFolder()
+    G_P2P_MAGNETSCMD        = config_getP2PMagnetCmd()
+    G_P2P_ELINKSCMD         = config_getP2PElinkCmd()
+    G_P2P_JDFOLDER          = config_getP2PJDownloaderFolder()
+    G_P2P_JDDOMAINS         = config_getP2PJDownloaderDomains()
+    if len(G_P2P_TORRENTSFOLDER) > 0 {
+        G_P2P_TORRENTSFOLDER = pathAbs(G_P2P_TORRENTSFOLDER)
+    }
+    if len(G_P2P_JDFOLDER) > 0 {
+        G_P2P_JDFOLDER = pathAbs(G_P2P_JDFOLDER)
+    }
+    
     //PLAYER
     //direct, fast, mp4, webm, webm2
     /*
@@ -324,6 +347,15 @@ func main() {
     serverdata.HandleFunc("/livetv-e-add/", liveTVAdminAdd)
     serverdata.HandleFunc("/livetv-e-check/", liveTVAdminCheck)
     serverdata.HandleFunc("/livetv-all-check/", liveTVAdminCheckAll)
+    //LiveTVURLs
+    serverdata.HandleFunc("/livetvurls-list/", liveTVURLAdminList)
+    serverdata.HandleFunc("/livetvurls-e-delete/", liveTVURLAdminRemove)
+    serverdata.HandleFunc("/livetvurls-e-add/", liveTVURLAdminAdd)
+    serverdata.HandleFunc("/livetvurls-e-check/", liveTVURLAdminCheck)
+    serverdata.HandleFunc("/livetvurls-all-check/", liveTVURLAdminCheckAll)
+    //P2P
+    serverdata.HandleFunc("/p2p-paste/", p2pPaste)
+    serverdata.HandleFunc("/p2p-paste-a/", p2pPasteAdd)
     //Users
     serverdata.HandleFunc("/users-list/", usersListBase)
     serverdata.HandleFunc("/users-add/", usersListAdd)
@@ -351,7 +383,7 @@ func main() {
             Addr                : G_SERVER_BIND_IP + ":" + G_SERVER_BIND_PORT,
             Handler             : serverdata,
             ReadTimeout         : 10 * time.Second,
-            WriteTimeout        : 10 * time.Second,
+            WriteTimeout        : 3600 * time.Second,
             MaxHeaderBytes      : 1 << 20,
         }
         server.ListenAndServe()
@@ -371,7 +403,7 @@ func main() {
             Addr                : G_SERVER_BIND_IP + ":" + G_SERVER_BIND_PORT,
             Handler             : serverdata,
             ReadTimeout         : 10 * time.Second,
-            WriteTimeout        : 10 * time.Second,
+            WriteTimeout        : 3600 * time.Second,
             MaxHeaderBytes      : 1 << 20,
             TLSConfig           : cfg,
             TLSNextProto        : make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),

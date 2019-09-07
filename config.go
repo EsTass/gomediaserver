@@ -356,3 +356,35 @@ func config_getPymiLang() string {
     result := viper.GetString( ident )
     return result
 }
+
+//P2P
+
+func config_getP2PTorrentFolder() string {
+    ident := "p2p.torrentsfolder"
+    result := viper.GetString( ident )
+    return result
+}
+
+func config_getP2PMagnetCmd() string {
+    ident := "p2p.magnetscmd"
+    result := viper.GetString( ident )
+    return result
+}
+
+func config_getP2PElinkCmd() string {
+    ident := "p2p.elinkscmd"
+    result := viper.GetString( ident )
+    return result
+}
+
+func config_getP2PJDownloaderFolder() string {
+    ident := "p2p.jdownloaderfolder"
+    result := viper.GetString( ident )
+    return result
+}
+
+func config_getP2PJDownloaderDomains() []string {
+    ident := "p2p.jdownloaderdomains"
+    result := viper.GetStringSlice( ident )
+    return result
+}

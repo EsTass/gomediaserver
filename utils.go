@@ -236,6 +236,12 @@ func intToStr( i int ) string {
     return strconv.Itoa( i )
 }
 
+//INT64 TO STRING
+
+func int64ToStr( i int64 ) string {
+    return strconv.FormatInt(i, 10)
+}
+
 //FLOAT TO STRING
 
 func floatToStr( i float64 ) string {
@@ -392,15 +398,25 @@ func appPath() string {
 //PATH JOIN
 
 func pathJoin( a string, b string ) string {
-    //filepath.Abs(a)
     return filepath.Join(a, b)
+}
+
+//PATH ABSOLUTE
+
+func pathAbs( a string ) string {
+    result := a
+    p, err := filepath.Abs(a)
+    if err == nil {
+        result = p
+    }
+    return result
 }
 
 //FILES ON FOLDER
 
 func getFiles( folder string, extension string ) []string {
     var result []string
-    folder, _ = filepath.Abs(folder)
+    folder = pathAbs(folder)
     files, err := ioutil.ReadDir(folder)
     if err != nil {
         log.Fatal(err)
@@ -423,7 +439,7 @@ func getFiles( folder string, extension string ) []string {
 
 func getFolders( folder string ) []string {
     var result []string
-    folder, _ = filepath.Abs(folder)
+    folder = pathAbs(folder)
     files, err := ioutil.ReadDir(folder)
     if err != nil {
         log.Fatal(err)
@@ -579,6 +595,20 @@ func checkMimeImage(file string) bool {
     mime := fileMime( file )
     valid := []string { "jpeg", "jpg", "png", "gif" }
     if strInStr( mime, "image" ) || sliceInString(mime, valid) {
+        result = true
+    }
+
+	return result
+}
+
+func checkMimeCompress(file string) bool {
+    result := false
+    mime := fileMime( file )
+    valid := []string { "zip", "rar", "7z", "compressed" }
+    if sliceInString(mime, valid) {
+        result = true
+    } else if strEndWith( file, ".7z" ) || strEndWith( file, ".rar" ) || strEndWith( file, ".lzma" ) || strEndWith( file, ".tar" ) || strEndWith( file, ".tar.gz" ) {
+        //some mime: application/octet-stream
         result = true
     }
 
@@ -864,4 +894,49 @@ func dirSizeMB(path string) float64 {
     sizeMB := float64(dirSize) / 1024.0 / 1024.0
 
     return sizeMB
+}
+
+//FILE SIZE
+
+func fileSizeMB( file string ) float64 {
+    var result float64 = 0.0
+    if fileExist(file) {
+        fi, err := os.Stat(file);
+        if err != nil {
+            result = 0.0
+        } else {
+            result = float64(fi.Size()) / 1024.0 / 1024.0
+        }
+    }
+    
+    return result
+}
+
+func fileSize( file string ) int64 {
+    var result int64 = 0
+    if fileExist(file) {
+        fi, err := os.Stat(file);
+        if err != nil {
+            result = 0
+        } else {
+            result = fi.Size()
+        }
+    }
+    
+    return result
+}
+
+//SIZE TO HUMAN
+
+func sizeToHuman(b int64) string {
+        const unit = 1024
+        if b < unit {
+                return fmt.Sprintf("%d B", b)
+        }
+        div, exp := int64(unit), 0
+        for n := b / unit; n >= unit; n /= unit {
+                div *= unit
+                exp++
+        }
+        return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }
