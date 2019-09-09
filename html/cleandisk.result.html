@@ -1,0 +1,33 @@
+
+        <h1>{{.Title}}</h1>
+        
+        <div id="dAdd" class="tList widthFull">
+            <table class="widthFull" style="background-color: gainsboro; text-align: center;font-size: 120%;">
+                <tr>
+                    <th>FILE</th>
+                    <th>SIZE</th>
+                    <th>TITLE</th>
+                    <th>SEASON</th>
+                    <th>EPISODE</th>
+                    <th>ACTION</th>
+                </tr>
+                {{range .Todos}}
+                <tr>
+                    <td style='max-width: 30vw;word-wrap: break-word;'>{{.file}}</td>
+                    <td style='max-width: 30vw;word-wrap: break-word;'>{{.filesize}}</td>
+                    <td style='max-width: 30vw;word-wrap: break-word;'>{{.title}}</td>
+                    <td style='max-width: 30vw;word-wrap: break-word;'>{{.season}}</td>
+                    <td style='max-width: 30vw;word-wrap: break-word;'>{{.episode}}</td>
+                    {{if $.Preview}}
+                    <td style='max-width: 40vw;word-wrap: break-word;background-color: yellowgreen;'>PREVIEW</td>
+                    {{else}}
+                    <td style='max-width: 40vw;word-wrap: break-word;background-color: darkred;'>DELETED</td>
+                    {{end}}
+                </tr>
+                {{end}}
+                <tr>
+                    <th colspan="100">FREE SPACE: {{.FreeSpace}}</th>
+                </tr>
+            </table>
+        </div>
+        

@@ -20,6 +20,10 @@ import (
     "log"
     "regexp"
     "crypto/md5"
+    
+    "bytes"
+    "unicode"
+    "encoding/json"
 )
 
 //DEBUG INFO
@@ -64,6 +68,19 @@ func checkLoguedUser(w http.ResponseWriter, r *http.Request) bool {
     return result
 }
 
+func checkLoguedUserFromGet(w http.ResponseWriter, r *http.Request) bool {
+    result := false
+
+    sessionident := getParam( r, "PHPSESSION" )
+    username := sqlite_getSessionUser( sessionident )
+    // Check if user is authenticated
+    if len( username ) > 0 {
+        result = true
+    }
+    
+    return result
+}
+
 func checkLoguedUserAdmin(w http.ResponseWriter, r *http.Request) bool {
     result := false
 
@@ -80,22 +97,26 @@ func checkLoguedUserAdmin(w http.ResponseWriter, r *http.Request) bool {
 //GET SESSION ID
 
 func getSessionID( w http.ResponseWriter, r *http.Request ) string {
-    session, err := G_STORE.Get(r, "cookie-name")
-    result := getRandomStringNum( 32 )
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return ""
+    //phpms compat
+    size := 32
+    result := getParam( r, "PHPSESSION" )
+    if len(result) != size {
+        c, err := r.Cookie("gms")
+        if err != nil || len(c.Value) != size {
+            result = getRandomStringNum( size )
+            c := http.Cookie{
+                Name    : "gms",
+                Value   : result,
+                MaxAge  : 3600 * 24 * 365,
+                Path    : "/",
+            }
+            http.SetCookie(w, &c)
+        } else {
+            result = c.Value
+            //http.SetCookie(w, c)
+        }
+        showInfo( "SESSION-GET-ID: " + result )
     }
-    if session.Values["id"] == nil || len( session.Values["id"].(string) ) < 32 {
-        session.Values["id"] = result
-        session.Save(r, w)
-    } else {
-        result = session.Values["id"].(string)
-    }
-    //result := session.ID
-    //fmt.Println( session )
-    //fmt.Println( session.Values )
-    showInfo( "SESSION-GET-ID: " + result )
     return result
 }
 
@@ -131,6 +152,29 @@ func getUserURL( r *http.Request ) string {
         scheme = "http"
     }
     result = scheme + "://" + G_SERVER_BIND_IP + r.URL.RequestURI()
+    return result
+}
+
+//GET SERVER URL
+
+func getServerURL( r *http.Request ) string {
+    var result, scheme, host string
+    if G_SERVER_HTTPS {
+        scheme = "https"
+    } else {
+        scheme = "http"
+    }
+    if r.URL.IsAbs() {
+        host = r.Host
+        if i := strings.Index(host, ":"); i != -1 {
+            host = host[:i]
+        }
+    }
+    if len(host) > 0 {
+        result = scheme + "://" + host
+    } else {
+        result = scheme + "://" + G_SERVER_BIND_IP + ":" + G_SERVER_BIND_PORT
+    }
     return result
 }
 
@@ -939,4 +983,33 @@ func sizeToHuman(b int64) string {
                 exp++
         }
         return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+//JSON UTF8 FORCE ENCODE
+
+func jsonEncode(input string) string {
+	var buf bytes.Buffer
+	for _, r := range input {
+		if unicode.IsControl(r) {
+			fmt.Fprintf(&buf, "\\u%04X", r)
+		} else {
+			fmt.Fprintf(&buf, "%c", r)
+		}
+	}
+	return buf.String()
+}
+
+//JSON URL FORCE ENCODE
+
+func jsonURLEncode(input []listKodiElement) string {
+	buf := new(bytes.Buffer)
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(&input); err != nil {
+		showInfoError(err)
+	}
+    result := buf.String()
+    result = strings.Replace(result, "/", "\\/", -1)
+
+	return result
 }

@@ -5,6 +5,7 @@ import (
     "fmt"
     "net/http"
     "html/template"
+    "encoding/json"
     "bytes"
     "strings"
     //"strconv"
@@ -62,6 +63,27 @@ func checkBaseActionIP( w http.ResponseWriter, r *http.Request, actionident stri
     return result
 }
 
+func checkBaseActionIPKodi( w http.ResponseWriter, r *http.Request, actionident string ) bool {
+    result := false
+    userip := getUserIP( r )
+    
+    //allways used by actions
+    if G_SERVER_HTTPS {
+        w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+    }
+
+    if checkUserIP( r ) == false {
+        //invalid IP
+        showInfo( actionident + "-INVALID-IP " + userip )
+        sqlite_log_insert( "badip", "", "INVALID IP", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        http.Error(w, "Error 404 Invalid Access.", 404)
+    } else {
+        result = true
+    }
+    
+    return result
+}
+
 func checkBaseActionAuth( w http.ResponseWriter, r *http.Request, actionident string ) bool {
     result := false
 
@@ -71,6 +93,22 @@ func checkBaseActionAuth( w http.ResponseWriter, r *http.Request, actionident st
         showInfo( actionident + ": no logged user" )
         //show login
         loginFormShow( w, r, "" )
+    } else {
+        result = true
+    }
+    
+    return result
+}
+
+func checkBaseActionAuthKodi( w http.ResponseWriter, r *http.Request, actionident string ) bool {
+    result := false
+
+    if checkUserIP( r ) == false {
+        //invalid IP
+        sqlite_log_insert( "kodi-badip", "", "INVALID IP", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        http.Error(w, "Error 404 Invalid Access.", 404)
+    } else if checkLoguedUserFromGet( w, r ) == false {
+        showInfo( actionident + ": no logged user" )
     } else {
         result = true
     }
@@ -201,10 +239,20 @@ type listBaseTemp struct {
 }
 
 func listBase(w http.ResponseWriter, r *http.Request) {
-    //exclude /assets/
-    if checkBaseActionAuth(w, r, "LIST-BASE") == false {
+    
+    //Kodi compat phpmediaserver
+    actionp := getParamPost( r, "action" )
+    actiong := getParamPost( r, "action" )
+    if actionp == "login" {
+        showInfo( "LIST-TO-KODI:" + actionp )
+        loginKodi( w, r )
+    } else if actiong == "kodi" {
+        showInfo( "LIST-TO-KODI:" + actiong )
+        listBaseKodi( w, r )
+    } else if checkBaseActionAuth(w, r, "LIST-BASE") == false {
         //Invalid IP or user
     } else if strInStr( r.URL.RequestURI(), "/assets/" ) == false {
+        //exclude /assets/
         //sqlite_log_insert( "list", "user", "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
 
         // Check if user is authenticated
@@ -221,15 +269,10 @@ func listBase(w http.ResponseWriter, r *http.Request) {
             actor := getParam(r, "actor")
             //Search
             search := getParam(r, "search")
-            //saction for kodi/phpmediaserver compat
-            saction := getParam(r, "saction")
             
-            if page == "" && genre == "" && actor == "" && search == "" && saction == "" {
+            if page == "" && genre == "" && actor == "" && search == "" {
                 //Frontal page
                 listBaseFrontal(w,r)
-            } else if saction != "" {
-                //KODI actions, based on compat with phpmediaserver/kodi plugin
-                
             } else {
                 //List based on searchs
                 pagenum := strToInt( page )
@@ -954,7 +997,7 @@ func listSearch(w http.ResponseWriter, r *http.Request) {
         showInfo( "SEARCH-LIST: " )
         tmpl := template.Must(template.ParseFiles("html/search.html"))
         menu := getMenu(w, r)
-        orderby := []string { "Last Added", "Premiere", "Rating", "Year", "Title" }
+        orderby := []string { "Last Added", "Premiere", "Rating", "Year", "Title", "Last Added" }
         formData := listSearchTemp{
             Menu        :   template.HTML( menu ),
             Title       :   "Search",
@@ -987,7 +1030,7 @@ func listSearchResult(w http.ResponseWriter, r *http.Request) {
         genre2 := getParamPost(r, "genre2")
         genre3 := getParamPost(r, "genre3")
         orderby := getParamPost(r, "orderby")
-        mediainfo := sqlite_getMediaMediaInfoSearch(search, year, year2, rating, genre1, genre2, genre3, orderby)
+        mediainfo := sqlite_getMediaMediaInfoSearch(search, year, year2, rating, genre1, genre2, genre3, orderby, "1000", true)
         showInfo( "SEARCH-LIST-RESULT: " )
         tmpl := template.Must(template.ParseFiles("html/search.result.html"))
         formData := listSearchResultTemp{
@@ -996,6 +1039,250 @@ func listSearchResult(w http.ResponseWriter, r *http.Request) {
         }
         tmpl.Execute(w, formData)
     }
+}
+
+//KODI
+
+type listKodiElement struct {
+    Name      string    `json:"name"`
+    Plot      string    `json:"plot"`
+    Year      int       `json:"year"`
+    Season    int       `json:"season"`
+    Episode   int       `json:"episode"`
+    Thumb     string    `json:"thumb"`
+    Landscape string    `json:"landscape"`
+    Banner    string    `json:"banner"`
+    Video     string    `json:"video"`
+    Genre     string    `json:"genre"`
+}
+
+func listBaseKodi(w http.ResponseWriter, r *http.Request) {
+    var js []byte
+    if checkBaseActionAuthKodi(w, r, "LIST-BASE-KODI") == false {
+        //Invalid IP or user login => false
+        datajson := map[string]bool{ "login" : false }
+        js, _ = json.Marshal(datajson)
+    } else {
+        sessionident := getParam( r, "PHPSESSION" )
+        username := sqlite_getSessionUser( sessionident )
+        sqlite_log_insert( "list-kodi", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+        //Params: action, saction, search, cat, page
+        //page := getParam(r, "page")
+        search := getParam(r, "search")
+        saction := getParam(r, "saction")
+        cat := getParam(r, "cat")
+        //sactions: check, categories, category, search, series
+        switch saction {
+            case "check":
+                datajson := map[string]bool{ "login" : true }
+                js, _ = json.Marshal(datajson)
+            case "categories":
+                datajson := []string { 
+                    " CONTINUE",
+                    " PREMIERE",
+                    " RECOMENDED",
+                    " LAST ADDED",
+                    " LIVETV",
+                    "+SERIES",
+                    "-SEARCH",
+                    "*UPDATE",
+                }
+                for _, genre := range G_GENRES {
+                    datajson = append(datajson,genre)
+                }
+                js, _ = json.Marshal(datajson)
+            case "search":
+                var datajson []listKodiElement
+                listdata := sqlite_getMediaMediaInfoFilter( G_LISTSIZE, 0, "", "", search )
+                if len(listdata) > 0 {
+                    for _, d := range listdata {
+                        title := d["title"]
+                        if len(d["season"]) > 0 {
+                            title += " " + d["season"] + "x" + fmt.Sprintf( "%02d", strToInt(d["episode"]) )
+                        }
+                        datajson = append( datajson, listKodiElement {
+                            Name      : title,
+                            Plot      : d["plot"],
+                            Year      : strToInt(d["year"]),
+                            Season    : strToInt(d["season"]),
+                            Episode   : strToInt(d["episode"]),
+                            Thumb     : getServerURL(r) + "/mediainfo-img/?type=poster&id=" + d["idmediainfo"] + "&PHPSESSION=" + sessionident + "|auth=SSL/TLS&verifypeer=false",
+                            Landscape : getServerURL(r) + "/mediainfo-img/?type=landscape&id=" + d["idmediainfo"] + "&PHPSESSION=" + sessionident + "|auth=SSL/TLS&verifypeer=false",
+                            Banner    : getServerURL(r) + "/mediainfo-img/?type=banner&id=" + d["idmediainfo"] + "&PHPSESSION=" + sessionident + "|auth=SSL/TLS&verifypeer=false",
+                            Video     : getServerURL(r) + "/media-play-time/?id=" + d["idmedia"] + "&mode=webm&timeplayed=0&PHPSESSION=" + sessionident + "|auth=SSL/TLS&verifypeer=false",
+                            Genre     : d["genre"],
+                        })
+                    }
+                } else {
+                    datajson = append( datajson, listKodiElement {
+                        Name      : "No Elements",
+                        Plot      : "",
+                        Year      : 0,
+                        Season    : 0,
+                        Episode   : 0,
+                        Thumb     : "",
+                        Landscape : "",
+                        Banner    : "",
+                        Video     : "",
+                        Genre     : "",
+                    })
+                }
+                    
+                js, _ = json.Marshal(datajson)
+                //js = []byte(jsonURLEncode(datajson))
+            
+            case "category":
+                var datajson []listKodiElement
+                var listdata map[int]map[string]string
+                livetv := false
+                switch cat{
+                    case " CONTINUE":
+                        listdata = sqlite_getPlayedMediaInfoLimit( intToStr(G_LISTSIZE) )
+                    
+                    case " PREMIERE":
+                        listdata = sqlite_getMediaMediaInfo_Premiere( G_LISTSIZE )
+                    
+                    case " RECOMENDED":
+                        listdata4 := sqlite_getPlayedMediaInfoLimit( intToStr(G_LISTSIZE) )
+                        if len(listdata4) > 0 {
+                            listdata = sqlite_getMediaMediaInfoRelatedID( listdata4[0]["idmediainfo"] )
+                        }
+                    
+                    case " LAST ADDED":
+                        listdata = sqlite_getMediaMediaInfo( G_LISTSIZE, 0 )
+                    
+                    case " LIVETV":
+                        listdata = sqlite_getMediaLive( intToStr(G_LISTSIZE) )
+                        livetv = true
+                    case "+SERIES":
+                        listdata = sqlite_getPlayedMediaInfoLimit( intToStr(G_LISTSIZE) )
+                    default:
+                        //genre or search
+                        listdata = sqlite_getMediaMediaInfoFilter( G_LISTSIZE, 0, cat, "", "" )
+                        if len(listdata) == 0 {
+                            listdata = sqlite_getMediaMediaInfoFilter( G_LISTSIZE, 0, "", "", cat )
+                        }
+                }   
+                if len(listdata) > 0 {
+                    for _, d := range listdata {
+                        title := d["title"]
+                        if len(d["season"]) > 0 {
+                            title += " " + d["season"] + "x" + fmt.Sprintf( "%02d", strToInt(d["episode"]) )
+                        }
+                        now := "0"
+                        if len(d["now"]) > 0 {
+                            now = d["now"]
+                        }
+                        urlvideo := ""
+                        plot := d["plot"]
+                        if livetv == false {
+                            urlvideo = getServerURL(r) + "/media-play-time/?id=" + d["idmedia"] + "&mode=webm&timeplayed="+now+"&PHPSESSION=" + sessionident + "&|auth=SSL/TLS&verifypeer=false"
+                            //get files and add tags
+                            taglist := strings.Join( fscrap_getFileTags( d[ "file" ] ), " " )
+                            plot = title + " (" + d["year"] + ") " + " (" + taglist + "): " + plot
+                        } else {
+                            urlvideo = getServerURL(r) + "/livetv-play-time/?id=" + d["idmedialive"] + "&PHPSESSION=" + sessionident + "&|auth=SSL/TLS&verifypeer=false"
+                            plot = title
+                        }
+                        datajson = append( datajson, listKodiElement {
+                            Name      : title,
+                            Plot      : plot,
+                            Year      : strToInt(d["year"]),
+                            Season    : strToInt(d["season"]),
+                            Episode   : strToInt(d["episode"]),
+                            Thumb     : getServerURL(r) + "/mediainfo-img/?type=poster&id=" + d["idmediainfo"] + "&PHPSESSION=" + sessionident + "&|auth=SSL/TLS&verifypeer=false",
+                            Landscape : getServerURL(r) + "/mediainfo-img/?type=landscape&id=" + d["idmediainfo"] + "&PHPSESSION=" + sessionident + "&|auth=SSL/TLS&verifypeer=false",
+                            Banner    : getServerURL(r) + "/mediainfo-img/?type=banner&id=" + d["idmediainfo"] + "&PHPSESSION=" + sessionident + "&|auth=SSL/TLS&verifypeer=false",
+                            Video     : urlvideo,
+                            Genre     : d["genre"],
+                        })
+                    }
+                } else {
+                    datajson = append( datajson, listKodiElement {
+                        Name      : "No Elements",
+                        Plot      : "",
+                        Year      : 0,
+                        Season    : 0,
+                        Episode   : 0,
+                        Thumb     : "",
+                        Landscape : "",
+                        Banner    : "",
+                        Video     : "",
+                        Genre     : "",
+                    })
+                }
+                js, _ = json.Marshal(datajson)
+                //js = []byte(jsonURLEncode(datajson))
+            
+            case "series":
+                var datajson []string
+                listdata := sqlite_getMediaMediaInfo_PremiereSeries( G_LISTSIZE )
+                if len(listdata) > 0 {
+                    for _, seriee := range listdata {
+                        //datajson = append(datajson,seriee["title"] + "(" + seriee["year"] + ")")
+                        datajson = append(datajson,seriee["title"])
+                    }
+                } else {
+                    datajson = append( datajson, "No Elements" )
+                }
+                    
+                js, _ = json.Marshal(datajson)
+                //js = []byte(jsonURLEncode(datajson))
+            
+            default:
+                
+        }
+    }
+    w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+    w.Write(js)
+}
+
+func loginKodi(w http.ResponseWriter, r *http.Request) {
+    var js []byte
+    sessionident := getSessionID( w, r )
+    username := sqlite_getSessionUser( sessionident )
+    
+    if checkBaseActionIPKodi(w, r, "KODI-LOGIN") == false {
+        //Invalid IP
+        datajson := map[string]bool{ "login" : false }
+        js, _ = json.Marshal(datajson)
+    } else if len( username ) > 0 {
+        showInfo( "KODI-LOGIN: logged user: " + username + " - " + sessionident )
+        //Check login
+        datajson := map[string]bool{ "login" : true }
+        js, _ = json.Marshal(datajson)
+    }else if r.Method != http.MethodPost {
+        datajson := map[string]bool{ "login" : false }
+        js, _ = json.Marshal(datajson)
+    } else {
+        //post method: check valid login
+        // Set user as authenticated
+        //if r.FormValue("user") == "test" && r.FormValue("pass") == "test" {
+        username := getParamPost(r, "user")
+        pass := getParamPost(r, "pass")
+        if checkLoginErrorMax( getUserIP( r ) ) {
+            datajson := map[string]bool{ "login" : false }
+            js, _ = json.Marshal(datajson)
+        } else if checkUser( username, pass ) {
+            showInfo( "KODI-LOGIN-TRY: OK loggin user: " + username + " - " + sessionident )
+            sessiondata := sqlite_getSession( sessionident )
+            if len( sessiondata ) > 0 {
+                sqlite_session_update( sessionident, username, getUserIP( r ) )
+            } else {
+                sqlite_session_insert( sessionident, username, getUserIP( r ) )
+            }
+            sqlite_log_insert( "kodi-login-OK", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+            datajson := map[string]bool{ "login" : true }
+            js, _ = json.Marshal(datajson)
+        } else {
+            showInfo( "KODI-LOGIN-RETRY: KO loggin user: " + username + " - " + sessionident )
+            sqlite_log_insert( "kodi-login-KO", username, "", getUserURL( r ), getUserReferer( r ), getUserIP( r ) )
+            datajson := map[string]bool{ "login" : false }
+            js, _ = json.Marshal(datajson)
+        }
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(js)
 }
 
 //ADMINS ACTIONS
@@ -2159,6 +2446,95 @@ func p2pPasteAdd(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+//CLEAN DISK
+
+type listCleanDisk struct {
+    Menu        template.HTML
+    Years       []string
+    Yearsi      []string
+    Ratings     []string
+    Title       string
+    FreeSpace   string
+}
+
+func cleanDisk(w http.ResponseWriter, r *http.Request) {
+    // Check if user is authenticated
+    if checkBaseActionAuth(w, r, "SEARCH-LIST") == false {
+        //Invalid IP or user
+    } else {
+        showInfo( "CLEANDISK-LIST: " )
+        tmpl := template.Must(template.ParseFiles("html/cleandisk.html"))
+        menu := getMenu(w, r)
+        formData := listCleanDisk{
+            Menu        :   template.HTML( menu ),
+            Title       :   "CleanDisk",
+            Years       :   fscrap_getYears(),
+            Yearsi      :   fscrap_getYearsInv(),
+            Ratings     :   fscrap_getRatings(),
+            FreeSpace   :   sizeToHuman(getFreeSpace(G_DOWNLOADS_FOLDER)),
+        }
+        tmpl.Execute(w, formData)
+    }
+}
+
+type listCleanDiskResult struct {
+    Title       string
+    Preview     bool
+    Todos       listBaseElement
+    FreeSpace   string
+}
+
+func cleanDiskResult(w http.ResponseWriter, r *http.Request) {
+    // Check if user is authenticated
+    if checkBaseActionAuth(w, r, "CLEANDISK-LIST-RESULT") == false {
+        //Invalid IP or user
+    } else {
+        //params: search, numfiles, minsize, yearmin, yearmax, maxrating, previewmode
+        search := getParamPost(r, "search")
+        numfiles := getParamPost(r, "numfiles")
+        numfilesint := strToInt(numfiles)
+        minsize := getParamPost(r, "minsize")
+        minsizeint := strToInt(minsize)
+        yearmin := getParamPost(r, "yearmin")
+        yearmax := getParamPost(r, "yearmax")
+        maxrating := getParamPost(r, "maxrating")
+        previewmode := getParamPost(r, "preview")
+        preview := true
+        if len(previewmode) == 0 {
+            preview = false
+        }
+        orderby := "First Added"
+        mediainfo := sqlite_getMediaMediaInfoSearch(search, yearmin, yearmax, maxrating, "", "", "", orderby, "10000", false)
+        //check everyfile
+        mediainfo2 := make(listBaseElement)
+        for k, m := range mediainfo {
+            if numfilesint <= 0 {
+                break
+            }
+            if fileExist(m["file"]) {
+                filesize := fileSize(m["file"])
+                if int64(minsizeint * 1024  * 1024) <= filesize {
+                    mediainfo2[k] = m
+                    mediainfo2[k]["filesize"] = sizeToHuman(filesize)
+                    if preview == false {
+                        fileRemove(m["file"])
+                    }
+                    numfilesint--
+                }
+            }
+        }
+        showInfo( "CLEANDISK-LIST-RESULT: " )
+        tmpl := template.Must(template.ParseFiles("html/cleandisk.result.html"))
+        formData := listCleanDiskResult{
+            Title       :   "Clean Disk Result",
+            Preview     :   preview,
+            Todos       :   mediainfo2,
+            FreeSpace   :   sizeToHuman(getFreeSpace(G_DOWNLOADS_FOLDER)),
+        }
+        tmpl.Execute(w, formData)
+    }
+}
+
 //MENU
 
 type menuListElement map[int]map[string]string //{ 0: { "title": "", "url": "", "admin" : false } },
@@ -2199,6 +2575,7 @@ func getMenu( w http.ResponseWriter, r *http.Request ) string {
         listdata[ len(listdata) ] = map[string]string{ "title" : "Played", "url" : "/played-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "Users", "url" : "/users-list/?", "admin" : "1" }
         listdata[ len(listdata) ] = map[string]string{ "title" : "IPs", "url" : "/ip-list/?", "admin" : "1" }
+        listdata[ len(listdata) ] = map[string]string{ "title" : "CleanDisk", "url" : "/cleandisk-list/?", "admin" : "1" }
     }
     
     //logOut
@@ -2223,31 +2600,6 @@ func getMenu( w http.ResponseWriter, r *http.Request ) string {
 
 func testBase( w http.ResponseWriter, r *http.Request ){
     //TEST CODE
-    //cronImagesLink()
-    //cronShortRun()
-    /*
-    data := `#EXTM3U
-
-#EXTINF:-1 tvg-logo="http://127.0.0.1/" group-title="Without category", hbo2 dual (eng esp) www.m3ugratis.com
-http://161.0.157.5/PLTV/88888888/224/3221227026/index.m3u8
-
-#EXTINF:-1 tvg-logo="http://puu.sh/mb4wQ/6cd02167d4.png" group-title="CINE", Fox Cinema www.m3ugratis.com
-http://161.0.157.7/PLTV/88888888/224/3221226793/03.m3u8
-
-#EXTINF:-1 tvg-logo="http://photocall.tv/images/fighttime.png" group-title="Deportes", Fight Time
-http://node01.openfutbol.es/SVoriginOperatorEdge/128761.smil/.m3u8
-
-#EXTINF:-1 tvg-logo="https://i.imgur.com/x5jNF2N.png" group-title="Deportes", MLB
-http://mlblive-akc.mlb.com/ls01/mlbam/mlb_network/NETWORK_LINEAR_1/master_wired.m3u8
-`
-    liveTvDataAdd(data)
-    */
-    //x, y := ffprobeSize( "http://212.104.160.156:1935/live/lebrijatv2/playlist2.m3u8?wowzasessionid=1758058924.m3u8" )
-    //cronUncompressFiles()
-    //x := fileMime( "/home/gura/htdocs/gomediaserver/src/app/cache/downloads/2/captura de examen_1.png.7z" )
-    //x := int64ToStr(getFreeSpace("/"))
-    fileRemove( G_CRONLONGTIME_FILE )
-    cronLiveTV()
     x := ""
     y := ""
     z := ""

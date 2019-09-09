@@ -13,9 +13,6 @@ import (
     //"strings"
     //"path/filepath"
     
-    //go get github.com/gorilla/sessions
-    "github.com/gorilla/sessions"
-    
     //go get "github.com/mattn/go-sqlite3"
     //"database/sql"
     //_ "github.com/mattn/go-sqlite3"
@@ -70,10 +67,6 @@ var (
     //DEBUG
     G_DEBUG             = true
     G_DEBUGFILEVIDEO    = ""
-    
-    //Sessions Keys
-    //G_STORE = sessions.NewCookieStore(config_sessionkey())
-    G_STORE             *sessions.CookieStore
     
     //SQLITE
     G_SQLFILE           = pathJoin( G_CACHE_FOLDER, "data.db" )
@@ -197,8 +190,6 @@ func init() {
     G_FFMPEG_LQ_MAX         = config_getFFmpegLQMax()
     G_FFMPEG_HQ_MIN         = config_getFFmpegHQMin()
     G_FFMPEG_HQ_MAX         = config_getFFmpegHQMax()
-    
-    G_STORE                 = sessions.NewCookieStore(config_sessionkey())
     
     G_SQLFILE               = config_getDBFile()
     showInfo( "CONFIG-G_SQLFILE: " + G_SQLFILE )
@@ -375,6 +366,9 @@ func main() {
     serverdata.HandleFunc("/ip-wl-remove/", ipWlRemove)
     serverdata.HandleFunc("/ip-bans-add/", ipBansAdd)
     serverdata.HandleFunc("/ip-bans-remove/", ipBansRemove)
+    //CleanDisk
+    serverdata.HandleFunc("/cleandisk-list/", cleanDisk)
+    serverdata.HandleFunc("/cleandisk-result/", cleanDiskResult)
     
     showInfo( "HTTP-SERVER-STARTED " )
     

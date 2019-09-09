@@ -1275,7 +1275,7 @@ func sqlite_getMediaInfoMediaInfoChaptersNext( title string, year string ) map[i
     return result
 }
 
-func sqlite_getMediaMediaInfoSearch( search string, yearmin string, yearmax string, rating string, genre1 string, genre2 string, genre3 string, orderby string ) map[int]map[string]string {
+func sqlite_getMediaMediaInfoSearch( search string, yearmin string, yearmax string, rating string, genre1 string, genre2 string, genre3 string, orderby string, limit string, ratingmode bool ) map[int]map[string]string {
     result := map[int]map[string]string {}
     sqlselect := ""
     subsqlselect := ""
@@ -1296,7 +1296,11 @@ func sqlite_getMediaMediaInfoSearch( search string, yearmin string, yearmax stri
     }
     
     if len(rating) > 0 {
-        subsqlselect += " AND IFNULL(CAST(rating AS FLOAT), 5) >= CAST('" + sqlite_encodeStrign(rating) + "' AS FLOAT) "
+        if ratingmode {
+            subsqlselect += " AND IFNULL(CAST(rating AS FLOAT), 5) >= CAST('" + sqlite_encodeStrign(rating) + "' AS FLOAT) "
+        } else {
+            subsqlselect += " AND IFNULL(CAST(rating AS FLOAT), 5) <= CAST('" + sqlite_encodeStrign(rating) + "' AS FLOAT) "
+        }
     }
     
     if len(genre1) > 0 {
@@ -1334,13 +1338,15 @@ func sqlite_getMediaMediaInfoSearch( search string, yearmin string, yearmax stri
             sqlorderby = " ORDER BY year DESC "
         case "Title":
             sqlorderby = " ORDER BY title ASC "
+        case "First Added":
+            sqlorderby = " ORDER BY idmedia ASC "
         case "Last Added":
             fallthrough
         default:
             sqlorderby = " ORDER BY idmedia DESC "
     }
     
-    sqlselect = "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL " + subsqlselect + " GROUP BY title, year " + sqlorderby + " LIMIT " + intToStr(G_LISTSIZE)
+    sqlselect = "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL " + subsqlselect + " GROUP BY title, year " + sqlorderby + " LIMIT " + limit
     showInfo( "MEDIAINFOSEARCH-SQL: " + sqlselect )
     result = sqlite_map_mediamediainfo( sqlselect )
     
@@ -1369,7 +1375,7 @@ func sqlite_getMediaMediaInfo_PremiereBR( size int ) map[int]map[string]string {
 
 func sqlite_getMediaMediaInfo_PremiereSeries( size int ) map[int]map[string]string {
     result := map[int]map[string]string {}
-    sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL AND ( mediainfo.sorttitle < DATETIME(CURRENT_DATE, '-3 months')  OR ( date( date( mediainfo.sorttitle, printf( '+%d years', mediainfo.season ) ), printf( '+%d days', ( mediainfo.episode * 7 ) ) ) ) > DATETIME(CURRENT_DATE, '-3 months') ) AND mediainfo.episode != '' AND mediainfo.season != '' GROUP BY mediainfo.title ORDER BY mediainfo.sorttitle DESC, mediainfo.season DESC, mediainfo.episode DESC LIMIT " + intToStr( size )
+    sqlselect := "SELECT * FROM media LEFT JOIN mediainfo ON media.idmediainfo = mediainfo.idmediainfo WHERE media.idmediainfo > 0 AND mediainfo.idmediainfo IS NOT NULL AND ( mediainfo.sorttitle < DATETIME(CURRENT_DATE, '-3 months')  OR ( date( date( mediainfo.sorttitle, printf( '+%d years', mediainfo.season ) ), printf( '+%d days', ( mediainfo.episode * 7 ) ) ) ) > DATETIME(CURRENT_DATE, '-3 months') ) AND mediainfo.episode != '' AND mediainfo.season != '' GROUP BY mediainfo.title, mediainfo.year ORDER BY mediainfo.sorttitle DESC, mediainfo.season DESC, mediainfo.episode DESC LIMIT " + intToStr( size )
     showInfo( "MEDIAINFOLIST-SQL: " + sqlselect )
     result = sqlite_map_mediamediainfo( sqlselect )
     
