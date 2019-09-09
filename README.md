@@ -31,12 +31,12 @@ A bunch of utilities for:
  - Extract files on cron
  - Filtered remove files to recover extra free space (manual, helped and cron)
  - Clean duplicates by quality with safe seeding (min days to seed) and max filesize to maintanin
+ - [Kodi pluging](https://github.com/EsTass/phpmediaserver-kodi)
  
 ## Working on
  - Search and download new media from web adding scrappers to configuration (youtube, elinks, magnets, torrents and dd supported, cron or manual with any external program like transmission, jdownloader, amule, qbittorent, etc).
  - Stop adding downloads on min space config
  - Mini dlna server
- - [Kodi pluging](https://github.com/EsTass/phpmediaserver-kodi)
  - Multilanguaje WebUI
  
 ## Default User (Important: change pass on first login)
